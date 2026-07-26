@@ -126,10 +126,26 @@ Dense RAG chấm điểm chunk theo độ giống vector → hay sót đúng th�
 
 ## 🚀 Cài đặt
 
-> **TL;DR — 3 bước là có app xài:**
-> 1. `git clone https://github.com/blueberry-sensei/alice-coding.git knowledge && rm -rf knowledge/.git`
-> 2. Chạy `bash knowledge/brain/stack/brain-up.sh` — trên **WSL** nó sẽ **stream log và GIỮ chạy** (**đừng đóng cửa sổ đó**). *(mac/Linux/Docker Desktop: chạy xong tự thoát.)*
-> 3. Mở `http://localhost:3000` → **Settings → Models** → dán key Gemini. **Xong.**
+> **TL;DR — 3 bước là có app xài.**
+>
+> **🪟 Windows / PowerShell:**
+> ```powershell
+> git clone https://github.com/blueberry-sensei/alice-coding.git knowledge; Remove-Item -Recurse -Force knowledge\.git
+> ```
+> ```powershell
+> powershell -File knowledge\brain\stack\brain-up.ps1
+> ```
+>
+> **🍎🐧 macOS / Linux / WSL:**
+> ```bash
+> git clone https://github.com/blueberry-sensei/alice-coding.git knowledge && rm -rf knowledge/.git
+> ```
+> ```bash
+> bash knowledge/brain/stack/brain-up.sh
+> ```
+> Trên **WSL**, launcher sẽ **stream log và GIỮ chạy** — **đừng đóng cửa sổ đó**. *(mac/Linux/Docker Desktop: chạy xong tự thoát.)*
+>
+> Rồi mở `http://localhost:3000` → **Settings → Models** → dán key Gemini. **Xong.**
 >
 > Để agent dùng não: chạy **INITIALIZATION** (Bước 4) — agent tự nạp kiến thức repo + **tự cắm MCP**, rồi bạn **restart agent**.
 
@@ -176,6 +192,13 @@ npm run uninstall
 - *(Tùy chọn, để chạy INITIALIZATION)* **Claude Desktop** hoặc **Codex Desktop**.
 
 ### Bước 1 — Lấy source (vào repo project của bạn)
+
+🪟 **PowerShell:**
+```powershell
+git clone https://github.com/blueberry-sensei/alice-coding.git knowledge; Remove-Item -Recurse -Force knowledge\.git
+```
+
+🍎🐧 **macOS / Linux / WSL:**
 ```bash
 git clone https://github.com/blueberry-sensei/alice-coding.git knowledge && rm -rf knowledge/.git
 ```

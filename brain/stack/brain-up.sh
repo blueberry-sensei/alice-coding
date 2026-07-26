@@ -50,10 +50,22 @@ resolve_source() {
   else
     abs="$STACK/$dir"
     if [ ! -e "$abs/$must" ]; then
-      echo "Lấy $dir ($ref) — một lần..."
+      echo "Lấy $dir ($ref)..."
       rm -rf "$abs"
       git clone --depth 1 --branch "$ref" "$repo" "$abs" \
         || { echo "!! Không clone được $repo (kiểm mạng / git)."; exit 1; }
+    elif [ -d "$abs/.git" ]; then
+      # Thư mục do launcher tự clone → LÀM MỚI. Không có bước này thì mọi lần chạy
+      # sau đều build từ source cũ và bản cập nhật không bao giờ tới được người dùng.
+      # `reset --hard` an toàn ở đây vì đây là bản sao chỉ-đọc do launcher quản lý;
+      # ai muốn sửa source thì dùng ALICE_APP_PATH / ALICE_CORE_PATH (nhánh trên).
+      echo "Cập nhật $dir ($ref)..."
+      if git -C "$abs" fetch --depth 1 origin "$ref" >/dev/null 2>&1; then
+        git -C "$abs" reset --hard FETCH_HEAD >/dev/null 2>&1 \
+          || echo "!! Không đặt lại được $dir về $ref — dùng bản đang có."
+      else
+        echo "!! Không fetch được $dir (kiểm mạng) — dùng bản đang có."
+      fi
     fi
     [ -e "$abs/$must" ] || {
       echo "!! $dir tải về nhưng thiếu '$must' — repo nguồn có thể đã đổi cấu trúc."

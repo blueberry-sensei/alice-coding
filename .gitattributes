@@ -1,0 +1,12 @@
+# Chuẩn hoá line-ending để chạy ĐỒNG NHẤT trên WSL (Docker CE) lẫn Docker Desktop.
+# Quan trọng: *.sh phải là LF, nếu không bash trong WSL lỗi '\r'.
+* text=auto eol=lf
+*.sh text eol=lf
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+# Nhị phân (không đụng)
+*.png binary
+*.jpg binary
+*.gif binary
+*.pdf binary

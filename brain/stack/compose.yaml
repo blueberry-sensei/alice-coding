@@ -1,0 +1,98 @@
+# ALICE CODING — brain stack (self-contained).
+# ALICE api+web (fork riêng) + embedding bge-m3 (bundled, local) + trang checklist.
+# Chạy 1 lệnh qua launcher (tự tính path tuyệt đối + pull model):
+#   Windows:   powershell -File brain-up.ps1
+#   mac/Linux: bash brain-up.sh
+# Launcher TỰ clone hai repo nguồn; chỉ khi chạy compose thủ công mới phải tự
+# đặt ALICE_APP_PATH + ALICE_CORE_PATH + BRAIN_DATA (tuyệt đối) + SAG_SECRET_KEY rồi:
+#   docker compose --env-file .env up -d --build
+name: alice-brain
+
+services:
+  # ── Embedding bge-m3 (local, bundled; OpenAI-compatible qua Ollama) ──
+  embedding:
+    image: ollama/ollama:latest
+    volumes:
+      - ${BRAIN_DATA}/ollama:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
+
+  # ── ALICE backend (build từ fork tại ${ALICE_APP_PATH}) ──
+  api:
+    build:
+      context: ${ALICE_APP_PATH}/apps/api
+      dockerfile: Dockerfile
+      # Engine ALICE CORE nằm ở repo RIÊNG (${ALICE_CORE_PATH}) để dùng chung cho
+      # nhiều project. additional_contexts đưa nó vào build mà không nhân bản file.
+      # Cần Docker Compose >= 2.17 + BuildKit.
+      additional_contexts:
+        alicecore: ${ALICE_CORE_PATH}
+      args:
+        SAG_API_EXTRAS: ""
+    environment:
+      SAG_ENVIRONMENT: dev
+      SAG_DEBUG: "false"
+      SAG_SECRET_KEY: ${SAG_SECRET_KEY:?dat SAG_SECRET_KEY trong .env (openssl rand -hex 32)}
+      SAG_CORS_ORIGINS: http://localhost:${WEB_PORT:-3000}
+      SAG_ALLOW_REGISTRATION: "false"
+      SAG_DATABASE_URL: sqlite+aiosqlite:////data/sag.db
+      SAG_DATA_DIR: /data/engine
+      SAG_UPLOAD_DIR: /data/uploads
+      SAG_SAG_VECTOR_PROVIDER: lancedb
+      SAG_SAG_LANGUAGE: ${SAG_SAG_LANGUAGE:-en}   # prompt trích xuất: 'en' | 'vi'
+      # Embedding -> container bundled (không cần đụng tới)
+      SAG_EMBEDDING_BASE_URL: http://embedding:11434/v1
+      SAG_EMBEDDING_MODEL: ${SAG_EMBEDDING_MODEL:-bge-m3}
+      SAG_EMBEDDING_API_KEY: "ollama"
+      # LLM: để trống -> cấu hình trong app (Settings → Models); hoặc điền qua .env
+      SAG_LLM_PROVIDER: ${SAG_LLM_PROVIDER:-openai}
+      SAG_LLM_BASE_URL: ${SAG_LLM_BASE_URL:-}
+      SAG_LLM_API_KEY: ${SAG_LLM_API_KEY:-}
+      SAG_LLM_MODEL: ${SAG_LLM_MODEL:-}
+    volumes:
+      - ${BRAIN_DATA}/sag:/data
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${API_PORT:-8000}:8000"
+    depends_on:
+      embedding:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import urllib.request,sys;
+          sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/v1/system/ready').status==200 else 1)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+
+  # ── ALICE web UI (nơi set credential LLM) ──
+  web:
+    build:
+      context: ${ALICE_APP_PATH}/apps/web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE: http://localhost:${API_PORT:-8000}
+        NEXT_PUBLIC_ENABLE_WINDOW_SCALING: "true"
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-3000}:3000"
+    restart: unless-stopped
+
+  # ── Trang checklist (tĩnh) ──
+  checklist:
+    image: nginx:alpine
+    volumes:
+      - ./checklist:/usr/share/nginx/html:ro
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${CHECKLIST_PORT:-8090}:80"
+    restart: unless-stopped

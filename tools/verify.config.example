@@ -1,0 +1,19 @@
+# verify.config — cấu hình cục bộ cho tools/verify.py
+# COPY thành `verify.config` (đã .gitignore) rồi chỉnh theo máy/project.
+# Biến môi trường trùng tên sẽ ghi đè.
+
+# Gốc source code của project, tính tương đối từ knowledge/.
+# Mặc định ".." — đúng khi template nằm ở <project>/knowledge/.
+CODE_ROOT=..
+
+# --- Ngưỡng "còn đọc hết được" (vượt -> verify nhắc prune, xem brain/KNOWLEDGE.md) ---
+MAX_ACTIVE_MISTAKES=60
+MAX_LOG_LINES=1200
+MAX_CONTEXT_DIGESTS=40
+
+# --- (Tuỳ chọn) Kiểm phủ sóng code -> wiki ---
+# Liệt kê thư mục con của CODE_ROOT chứa module. verify sẽ báo INFO cho module
+# chưa được nhắc trong wiki/ — vì brain KHÔNG index source code, vùng đó vô hình
+# với retrieval. Để trống thì bỏ qua kiểm tra này.
+# CODE_MODULE_DIRS=src,packages,apps
+CODE_MODULE_DIRS=

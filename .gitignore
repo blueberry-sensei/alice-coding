@@ -1,0 +1,37 @@
+# File cục bộ của chủ repo — KHÔNG ship trong template public
+AGENTS.md
+prompts.md
+
+# Artifact thiết kế cục bộ (brainstorming/specs) — không ship
+docs/superpowers/
+
+# Python bytecode
+__pycache__/
+*.pyc
+.claude
+.codex
+
+# Node — lớp vỏ npm không có dependency nào, lock file là nhiễu
+node_modules/
+package-lock.json
+
+# --- Runtime của brain: CHỨA SECRET hoặc dữ liệu sinh ra, không commit ---
+# brain.config giữ token/JWT của brain. .sag-data là DB (SQLite + LanceDB).
+brain/brain.config
+brain/.sync-state.json
+brain/stack/.env
+.sag-data/
+# Source do launcher tự clone (ghim ref) — KHÔNG commit vào repo này.
+brain/stack/alice-brain/
+brain/stack/alice-core/
+brain/stack/sag/
+
+# --- Cấu hình verify cục bộ theo máy (đường dẫn code root) ---
+tools/verify.config
+
+# --- Bản template mới do `tools/update.py` để lại khi có xung đột ---
+# Gộp tay xong thì xoá; không commit.
+*.new
+
+# LƯU Ý cho người DÙNG template: trong repo project của bạn, thư mục knowledge/
+# NÊN được commit (tri thức là tài sản của project) — chỉ trừ các mục ở trên.

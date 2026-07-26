@@ -1,0 +1,29 @@
+{
+  "name": "alice-coding",
+  "version": "2.1.0",
+  "private": true,
+  "description": "Trí nhớ dài hạn + kỷ luật làm việc cho AI coding agent. npm chỉ là lớp vỏ tiện tay — lõi là Python + Docker.",
+  "scripts": {
+    "doctor": "node tools/cli.js doctor",
+    "brain": "node tools/cli.js up",
+    "brain:up": "node tools/cli.js up",
+    "brain:down": "node tools/cli.js down",
+    "brain:restart": "node tools/cli.js restart",
+    "brain:status": "node tools/cli.js status",
+    "brain:logs": "node tools/cli.js logs",
+    "uninstall": "node tools/cli.js uninstall",
+    "brain:uninstall": "node tools/cli.js uninstall",
+    "reset": "node tools/cli.js reset",
+    "verify": "node tools/cli.js verify",
+    "verify:fix": "node tools/cli.js verify --fix",
+    "sync": "node tools/cli.js sync",
+    "sync:rebuild": "node tools/cli.js sync --rebuild",
+    "update": "node tools/cli.js update",
+    "update:check": "node tools/cli.js update --check",
+    "mcp": "node tools/cli.js mcp"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

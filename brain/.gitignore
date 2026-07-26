@@ -1,0 +1,6 @@
+# Runtime state của brain — KHÔNG commit, KHÔNG ship trong template
+.sync-state.json
+brain.config
+.sag-data/
+stack/.env
+stack/sag/

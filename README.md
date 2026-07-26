@@ -5,7 +5,7 @@
 ### Biến bất kỳ AI coding agent nào thành cộng sự **kỷ luật · trung thực · có trí nhớ dài hạn** — *không bao giờ quên context.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.1.1-6E56CF)](VERSION)
+[![Version](https://img.shields.io/badge/version-2.1.2-6E56CF)](VERSION)
 [![Engine](https://img.shields.io/badge/engine-ALICE%20CORE-6E56CF)](https://github.com/blueberry-sensei/alice-core)
 [![Embedding](https://img.shields.io/badge/embedding-bge--m3%20(local)-2EA043)](https://huggingface.co/BAAI/bge-m3)
 [![Runtime](https://img.shields.io/badge/runtime-Docker-2496ED?logo=docker&logoColor=white)](#-cài-đặt)
@@ -336,7 +336,7 @@ ALICE CODING/  (clone vào ./knowledge của project)
 
 ## 🗺️ Roadmap
 
-**v2.1.1** — bộ khung kỷ luật, forcing function và đường nâng cấp đã ổn định.
+**v2.1.2** — bộ khung kỷ luật, forcing function và đường nâng cấp đã ổn định.
 
 Đang làm:
 - Wrapper `/knowledge` cho Codex · Gemini · opencode

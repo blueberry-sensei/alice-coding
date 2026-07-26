@@ -69,12 +69,25 @@ function Resolve-Source($key, $repo, $ref, $dir, $mustContain, $what) {
     # `reset --hard` an toan vi day la ban sao chi-doc do launcher quan ly; ai muon
     # sua source thi dung ALICE_APP_PATH / ALICE_CORE_PATH (nhanh tren).
     Write-Host "Cap nhat $dir ($ref)..."
-    git -C $abs fetch --depth 1 origin $ref 2>$null | Out-Null
-    if ($LASTEXITCODE -eq 0) {
-      git -C $abs reset --hard FETCH_HEAD 2>$null | Out-Null
-      if ($LASTEXITCODE -ne 0) { Write-Host "!! Khong dat lai duoc $dir ve $ref - dung ban dang co." }
-    } else {
-      Write-Host "!! Khong fetch duoc $dir (kiem mang) - dung ban dang co."
+    # git ghi tien trinh ra stderr ngay khi thanh cong. PowerShell 5.1 goi moi dong
+    # stderr cua native exe la NativeCommandError, nen voi $ErrorActionPreference =
+    # "Stop" o dau file thi script DUNG HAN giua fetch va reset. Vi vay: KHONG
+    # redirect stderr, chi ha ErrorActionPreference quanh hai lenh git roi xet
+    # $LASTEXITCODE - do moi la tin hieu dung de biet git thanh cong hay khong.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+      git -C $abs fetch --depth 1 --quiet origin $ref
+      if ($LASTEXITCODE -eq 0) {
+        git -C $abs reset --hard --quiet FETCH_HEAD
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "!! Khong dat lai duoc $dir ve $ref - dung ban dang co."
+        }
+      } else {
+        Write-Host "!! Khong fetch duoc $dir (kiem mang) - dung ban dang co."
+      }
+    } finally {
+      $ErrorActionPreference = $prevEap
     }
   }
   if (-not (Test-Path (Join-Path $abs $mustContain))) {

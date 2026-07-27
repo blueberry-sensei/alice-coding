@@ -162,12 +162,12 @@ def check_citations(rep, cfg, do_fix):
                     if cpath.lower().endswith(".md") and cline is None:
                         target = resolve(cpath, md, code_root)
                         if target is None:
-                            rep.error("C1", "link tài liệu không tồn tại: `%s`" % code,
+                            rep.error("C1", "documentation link does not exist: `%s`" % code,
                                       rel_md, lineno)
                         continue
                     target = resolve(cpath, md, code_root)
                     if target is None:
-                        rep.error("C1", "citation trỏ file không tồn tại: `%s`" % code,
+                        rep.error("C1", "citation points at a missing file: `%s`" % code,
                                   rel_md, lineno)
                         continue
                     if cline is None:
@@ -176,24 +176,24 @@ def check_citations(rep, cfg, do_fix):
                     try:
                         src = target.read_text(encoding="utf-8", errors="replace").splitlines()
                     except OSError as e:
-                        rep.warn("C1", "không đọc được %s (%s)" % (cpath, e), rel_md, lineno)
+                        rep.warn("C1", "cannot read %s (%s)" % (cpath, e), rel_md, lineno)
                         continue
 
                     n = int(cline)
                     if n < 1 or n > len(src):
-                        rep.error("C1", "citation `%s` vượt số dòng file (%d dòng)"
+                        rep.error("C1", "citation `%s` is past the end of the file (%d lines)"
                                   % (code, len(src)), rel_md, lineno)
                         continue
                     if not anchor:
-                        rep.warn("C1", "citation `%s` thiếu #anchor -> không phát hiện được "
-                                 "khi code trôi dòng (xem wiki/README.md)" % code, rel_md, lineno)
+                        rep.warn("C1", "citation `%s` has no #anchor -> line drift in the code "
+                                 "cannot be detected (see wiki/README.md)" % code, rel_md, lineno)
                         continue
                     if anchor in src[n - 1]:
                         continue                                  # còn đúng
                     hits = [i + 1 for i, s in enumerate(src) if anchor in s]
                     if not hits:
-                        rep.error("C1", "anchor `#%s` KHÔNG còn trong %s — trang đang nói sai "
-                                  "về code" % (anchor, cpath), rel_md, lineno)
+                        rep.error("C1", "anchor `#%s` is GONE from %s - the page now describes "
+                                  "the code incorrectly" % (anchor, cpath), rel_md, lineno)
                         continue
                     new = hits[0]
                     old_str = "%s:%s#%s" % (cpath, cline, anchor)
@@ -201,7 +201,7 @@ def check_citations(rep, cfg, do_fix):
                     if do_fix:
                         replacements[old_str] = new_str
                     else:
-                        rep.warn("C1", "citation trôi dòng: `%s` -> dòng %d (chạy --fix để sửa)"
+                        rep.warn("C1", "citation drifted: `%s` -> line %d (run --fix to correct it)"
                                  % (old_str, new), rel_md, lineno)
 
             if do_fix and replacements:
@@ -209,7 +209,7 @@ def check_citations(rep, cfg, do_fix):
                     raw = raw.replace(old_str, new_str)
                 md.write_text(raw, encoding="utf-8")
                 fixed_total += len(replacements)
-                rep.info("C1", "đã sửa %d citation trôi dòng" % len(replacements), rel_md)
+                rep.info("C1", "fixed %d drifted citation(s)" % len(replacements), rel_md)
 
     return fixed_total
 
@@ -218,7 +218,7 @@ def check_citations(rep, cfg, do_fix):
 def check_router(rep):
     router = ROOT / "wiki" / "ROUTER.md"
     if not router.exists():
-        rep.error("C2", "thiếu wiki/ROUTER.md — chưa chạy INITIALIZATION?", "wiki/ROUTER.md")
+        rep.error("C2", "wiki/ROUTER.md is missing - has INITIALIZATION been run?", "wiki/ROUTER.md")
         return
     # CHỈ đọc các dòng bảng markdown (`| ... |`) — phần văn xuôi quanh bảng là hướng dẫn,
     # nhắc tên file làm ví dụ, không phải khai báo router.
@@ -237,15 +237,15 @@ def check_router(rep):
     pages = {p.name for p in (ROOT / "wiki").glob("*.md")} - skip
 
     for orphan in sorted(pages - listed):
-        rep.error("C2", "trang wiki `%s` KHÔNG có trong ROUTER.md — retrieval sẽ không "
-                  "bao giờ tìm ra nó" % orphan, "wiki/ROUTER.md")
+        rep.error("C2", "wiki page `%s` is NOT listed in ROUTER.md - retrieval will "
+                  "never find it" % orphan, "wiki/ROUTER.md")
     for dangling in sorted(listed - pages):
         if (ROOT / "wiki" / dangling).exists():
             continue
-        rep.error("C2", "ROUTER.md trỏ tới `%s` nhưng file không tồn tại" % dangling,
+        rep.error("C2", "ROUTER.md points at `%s` but that file does not exist" % dangling,
                   "wiki/ROUTER.md")
     if not pages:
-        rep.info("C2", "chưa có trang wiki module nào (bản generic chưa init)", "wiki/")
+        rep.info("C2", "no module wiki pages yet (generic copy, not initialised)", "wiki/")
 
 
 # ------------------------------------------------------- C3/C4/C6 pillar LOGs
@@ -281,36 +281,36 @@ def parse_entries(path, prefix):
 def check_log(rep, relpath, prefix, required_fields, check_id):
     path = ROOT / relpath
     if not path.exists():
-        rep.error(check_id, "thiếu %s" % relpath, relpath)
+        rep.error(check_id, "%s is missing" % relpath, relpath)
         return []
     entries = parse_entries(path, prefix)
 
     body = strip_noise(read(path))
     for i, line in enumerate(body.splitlines(), 1):
         if line.startswith("## ") and not ENTRY_RE.match(line):
-            rep.error(check_id, "heading sai format, phải là "
-                      "`## %s-0001 · [YYYY-MM-DD] tiêu đề · #tag`: %s"
+            rep.error(check_id, "malformed heading, it must be "
+                      "`## %s-0001 - [YYYY-MM-DD] title - #tag`: %s"
                       % (prefix, line.strip()[:70]), relpath, i)
 
     seen = {}
     for e in entries:
         if e["id"] in seen:
-            rep.error(check_id, "ID %s bị trùng (đã dùng ở dòng %d) — ID phải duy nhất "
-                      "và không tái sử dụng" % (e["id"], seen[e["id"]]), relpath, e["line"])
+            rep.error(check_id, "duplicate ID %s (already used on line %d) - IDs must be unique "
+                      "and never reused" % (e["id"], seen[e["id"]]), relpath, e["line"])
         seen[e["id"]] = e["line"]
         if not e["id"].startswith(prefix + "-"):
-            rep.error(check_id, "ID %s sai tiền tố (phải là %s-)" % (e["id"], prefix),
+            rep.error(check_id, "ID %s has the wrong prefix (it must be %s-)" % (e["id"], prefix),
                       relpath, e["line"])
         if e["status"] is None:
-            rep.error(check_id, "%s thiếu trường **Trạng thái**" % e["id"], relpath, e["line"])
+            rep.error(check_id, "%s is missing the **Trạng thái** field" % e["id"], relpath, e["line"])
         elif e["status"] not in STATUS_OK and not SUPERSEDED_RE.match(e["status"]):
-            rep.error(check_id, "%s có trạng thái không hợp lệ: %r (hợp lệ: %s, hoặc "
+            rep.error(check_id, "%s has an invalid status: %r (valid: %s, or "
                       "`SUPERSEDED → %s-XXXX`)" % (e["id"], e["status"],
                                                    " / ".join(sorted(STATUS_OK)), prefix),
                       relpath, e["line"])
         missing = [f for f in required_fields if f not in e["fields"]]
         if missing:
-            rep.error(check_id, "%s thiếu trường: %s" % (e["id"], ", ".join(missing)),
+            rep.error(check_id, "%s is missing field(s): %s" % (e["id"], ", ".join(missing)),
                       relpath, e["line"])
     return entries
 
@@ -322,7 +322,7 @@ def check_supersede(rep, all_entries):
             continue
         m = SUPERSEDED_RE.match(e["status"])
         if m and m.group(1) not in ids:
-            rep.error("C6", "%s trỏ SUPERSEDED → %s nhưng ID đó không tồn tại"
+            rep.error("C6", "%s is SUPERSEDED by %s but that ID does not exist"
                       % (e["id"], m.group(1)), e.get("file"), e["line"])
 
 
@@ -331,7 +331,7 @@ def check_context(rep):
     cdir = ROOT / "context"
     index = cdir / "INDEX.md"
     if not index.exists():
-        rep.error("C5", "thiếu context/INDEX.md", "context/INDEX.md")
+        rep.error("C5", "context/INDEX.md is missing", "context/INDEX.md")
         return 0
     body = strip_noise(read(index))
     listed = set()
@@ -345,10 +345,10 @@ def check_context(rep):
     digests = {p.name for p in cdir.glob("*.md")} - skip
 
     for orphan in sorted(digests - listed):
-        rep.error("C5", "digest `%s` không có dòng trong INDEX.md — session sau sẽ không "
-                  "biết nó tồn tại" % orphan, "context/INDEX.md")
+        rep.error("C5", "digest `%s` has no line in INDEX.md - later sessions will not "
+                  "know it exists" % orphan, "context/INDEX.md")
     for dangling in sorted(listed - digests):
-        rep.error("C5", "INDEX.md trỏ `%s` nhưng file không tồn tại" % dangling,
+        rep.error("C5", "INDEX.md points at `%s` but that file does not exist" % dangling,
                   "context/INDEX.md")
     return len(digests)
 
@@ -357,23 +357,23 @@ def check_context(rep):
 def check_bloat(rep, cfg, mistakes, decisions, n_digests):
     active = [e for e in mistakes if e["status"] == "ACTIVE"]
     if len(active) > int(cfg["MAX_ACTIVE_MISTAKES"]):
-        rep.warn("C7", "%d mistake ACTIVE (ngưỡng %s) — tầng 2 'đọc hết ACTIVE' sắp bất khả thi. "
-                 "Chạy prune/gộp theo brain/KNOWLEDGE.md"
+        rep.warn("C7", "%d ACTIVE mistakes (threshold %s) - reading them all is becoming impractical. "
+                 "Prune or merge them following brain/KNOWLEDGE.md"
                  % (len(active), cfg["MAX_ACTIVE_MISTAKES"]), "mistakes/LOG.md")
     for rel in ("mistakes/LOG.md", "decisions/LOG.md"):
         p = ROOT / rel
         if p.exists():
             n = len(read(p).splitlines())
             if n > int(cfg["MAX_LOG_LINES"]):
-                rep.warn("C7", "%s dài %d dòng (ngưỡng %s) — cân nhắc gộp entry trùng root cause"
+                rep.warn("C7", "%s is %d lines long (threshold %s) - consider merging entries sharing a root cause"
                          % (rel, n, cfg["MAX_LOG_LINES"]), rel)
     if n_digests > int(cfg["MAX_CONTEXT_DIGESTS"]):
-        rep.warn("C7", "%d digest trong context/ (ngưỡng %s) — cân nhắc archive digest cũ"
+        rep.warn("C7", "%d digests in context/ (threshold %s) - consider archiving the old ones"
                  % (n_digests, cfg["MAX_CONTEXT_DIGESTS"]), "context/")
 
     stale = [e for e in decisions if e["status"] == "ACTIVE"]
     if stale and len(stale) > 40:
-        rep.info("C7", "%d decision ACTIVE — rà lại xem cái nào Bệ hạ đã đổi ý mà chưa "
+        rep.info("C7", "%d ACTIVE decisions - review which ones have been superseded but not "
                  "SUPERSEDED" % len(stale), "decisions/LOG.md")
 
 
@@ -381,7 +381,7 @@ def check_bloat(rep, cfg, mistakes, decisions, n_digests):
 def check_coverage(rep, cfg):
     dirs = [d.strip() for d in cfg["CODE_MODULE_DIRS"].split(",") if d.strip()]
     if not dirs:
-        rep.info("C8", "bỏ qua kiểm phủ sóng code→wiki (chưa đặt CODE_MODULE_DIRS trong "
+        rep.info("C8", "skipping the code-to-wiki coverage check (CODE_MODULE_DIRS is not set in "
                  "tools/verify.config)")
         return
     code_root = (ROOT / cfg["CODE_ROOT"]).resolve()
@@ -389,13 +389,13 @@ def check_coverage(rep, cfg):
     for d in dirs:
         base = code_root / d
         if not base.is_dir():
-            rep.warn("C8", "CODE_MODULE_DIRS trỏ `%s` nhưng không phải thư mục" % d)
+            rep.warn("C8", "CODE_MODULE_DIRS points at `%s`, which is not a directory" % d)
             continue
         for sub in sorted(x for x in base.iterdir() if x.is_dir()):
             if sub.name.startswith((".", "_")) or sub.name in ("node_modules", "dist", "build"):
                 continue
             if sub.name.lower() not in wiki_text:
-                rep.info("C8", "module `%s/%s` chưa được nhắc trong wiki/ — brain không index "
+                rep.info("C8", "module `%s/%s` is not mentioned in wiki/ - the brain does not index "
                          "code, nên vùng này vô hình với retrieval" % (d, sub.name))
 
 
@@ -408,36 +408,36 @@ def emit(rep, as_json, fixed):
         print(json.dumps({"errors": rep.count("ERROR"), "warnings": rep.count("WARN"),
                           "fixed": fixed, "items": rep.items}, ensure_ascii=False, indent=2))
         return
-    print("[verify] kho tri thức: %s" % ROOT)
+    print("[verify] knowledge base: %s" % ROOT)
     if not rep.items:
-        print("[verify] OK — không phát hiện vấn đề.")
+        print("[verify] OK - no issues found.")
         return
     for item in sorted(rep.items, key=lambda i: (LEVEL_ORDER[i["level"]], i["check"])):
         loc = ""
         if item["file"]:
             loc = " (%s%s)" % (item["file"], ":%d" % item["line"] if item["line"] else "")
         print("  [%-5s] %s %s%s" % (item["level"], item["check"], item["msg"], loc))
-    print("[verify] tổng: %d ERROR · %d WARN · %d INFO%s"
+    print("[verify] total: %d ERROR | %d WARN | %d INFO%s"
           % (rep.count("ERROR"), rep.count("WARN"), rep.count("INFO"),
              " · đã tự sửa %d citation" % fixed if fixed else ""))
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Kiểm tra sức khoẻ kho tri thức knowledge/")
+    ap = argparse.ArgumentParser(description="Check the health of the knowledge/ base")
     ap.add_argument("--fix", action="store_true",
-                    help="tự sửa số dòng citation bị trôi (anchor còn tồn tại)")
-    ap.add_argument("--strict", action="store_true", help="coi WARN như ERROR")
-    ap.add_argument("--json", action="store_true", help="xuất JSON cho tool khác đọc")
+                    help="fix drifted citation line numbers (when the anchor still exists)")
+    ap.add_argument("--strict", action="store_true", help="treat WARN as ERROR")
+    ap.add_argument("--json", action="store_true", help="emit JSON for other tools to read")
     ap.add_argument("--config", default=str(HERE / "verify.config"))
     ap.add_argument("--root", default=None,
-                    help="gốc kho tri thức cần kiểm (mặc định: thư mục cha của tools/)")
+                    help="root of the knowledge base to check (default: the parent of tools/)")
     args = ap.parse_args()
 
     if args.root:
         global ROOT
         ROOT = Path(args.root).resolve()
         if not ROOT.is_dir():
-            print("[verify] --root không phải thư mục: %s" % ROOT)
+            print("[verify] --root is not a directory: %s" % ROOT)
             return 2
 
     cfg = load_config(args.config)

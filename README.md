@@ -170,23 +170,40 @@ npm run brain
 npm run uninstall
 ```
 
-| npm | Lệnh gốc tương đương |
+| Lệnh | Làm gì |
 |---|---|
-| `npm run doctor` | *(không có — chỉ npm mới có)* |
-| `npm run brain` | `powershell -File brain\stack\brain-up.ps1` · `bash brain/stack/brain-up.sh` |
-| `npm run brain:status` / `:logs` / `:down` | `docker compose --env-file .env ps` / `logs -f` / `down` |
-| `npm run uninstall` | Gỡ container, network, image local, cấu hình và dữ liệu runtime của `alice-brain`; giữ file tri thức đã commit. |
-| `npm run verify` / `verify:fix` | `python tools/verify.py [--fix]` |
-| `npm run sync` / `sync:rebuild` | `python brain/sync/sync.py [--rebuild]` |
-| `npm run update` / `update:check` | `python tools/update.py [--check]` |
-| `npm run mcp` | *(in sẵn lệnh cắm MCP đúng môi trường của bạn)* |
+| `npm run doctor` | Kiểm môi trường: Docker, Node, API, LLM, kho tri thức. **Chạy đầu tiên và mỗi khi thấy lạ.** |
+| `npm run brain` | Dựng/khởi động brain của project này. Cũng là lệnh **kéo bản app mới** về. |
+| `npm run brain:status` | Brain của project này: chế độ, cổng thật, container còn sống không |
+| `npm run brain:list` | **Mọi** brain trên máy — id, cổng, cái nào đang chạy |
+| `npm run brain:down` / `:restart` / `:logs` | Tắt / khởi động lại / xem log |
+| `npm run brain:pull` | Kéo lại model embedding nếu lần đầu bị lỗi mạng |
+| `npm run verify` / `verify:fix` | Soi sức khoẻ kho tri thức. `:fix` nắn citation trôi dòng |
+| `npm run sync` / `sync:rebuild` | Đẩy `knowledge/` vào não. `:rebuild` xoá sạch rồi nạp lại |
+| `npm run update:check` / `update` | Xem có bản template mới / nâng cấp template |
+| `npm run mcp` | In sẵn khối cấu hình MCP đúng cho brain của project này |
+| `npm run uninstall -- --yes` | Gỡ sạch Docker của brain này (container, volume, image, build cache). **Giữ** tri thức |
+| `npm run reset -- --yes` | XOÁ tri thức project rồi kéo lại template trắng |
+
+### Nâng cấp: hai lệnh, không phải một
+
+`npm run update` chỉ chép **file template** (`knowledge/`) — nó không biết gì về Docker. Bản
+**ứng dụng** nằm trong image, và image chỉ được kéo về khi dựng lại:
+
+```bash
+npm run update && npm run brain
+```
+
+Lệnh đầu cập nhật khung tri thức và in ra việc phải làm tay (nếu có); lệnh sau kéo image mới rồi
+khởi động lại. Chỉ chạy `npm run update` thì khung mới nhưng app vẫn là bản cũ.
 
 **`npm run doctor` là lệnh nên chạy đầu tiên và mỗi khi thấy lạ** — nó nói thẳng cái gì thiếu và sửa thế nào.
 
 ### Yêu cầu
 - **Docker** (Docker Desktop, hoặc Docker Engine/CE trong WSL) đang chạy.
-- **Git**, **Python 3.9+**, và ~**6–8GB** trống (image app + model `bge-m3`).
-- *(Tuỳ chọn)* **Node 18+** nếu muốn dùng lệnh `npm run …`.
+- **Node 18+** — bắt buộc: launcher dùng nó để tính danh tính brain và cấp cổng.
+- **Git** và **Python 3.9+** (cho `verify` / `sync` / `update`; bạn không phải gõ lệnh Python nào).
+- ~**6–8GB** trống (image app + model `bge-m3`).
 - Một **API key LLM free** — khuyên [AIStudio/Gemini](https://aistudio.google.com/apikey).
 - *(Tùy chọn, để chạy INITIALIZATION)* **Claude Desktop** hoặc **Codex Desktop**.
 
@@ -202,35 +219,20 @@ git clone https://github.com/blueberry-sensei/alice-coding.git knowledge; Remove
 git clone https://github.com/blueberry-sensei/alice-coding.git knowledge && rm -rf knowledge/.git
 ```
 
-### Bước 2 — Khởi động stack bằng **1 lệnh** (chọn đúng môi trường)
-
-<details open>
-<summary><b>🪟 Windows + Docker Desktop</b></summary>
-
-```powershell
-powershell -File knowledge\brain\stack\brain-up.ps1
-```
-Launcher kéo image ALICE dựng sẵn về chạy, pull model. Không cần git, không cần source, không cần sửa `.env`.
-</details>
-
-<details>
-<summary><b>🐧 Windows + WSL (Docker Engine/CE trong WSL)</b></summary>
-
-Docker chạy *trong* WSL → mở terminal **WSL** và chạy script `.sh` (không dùng PowerShell):
-```bash
-bash knowledge/brain/stack/brain-up.sh
-```
-> ⚠️ **GIỮ cửa sổ WSL này MỞ** khi dùng brain — đóng hết cửa sổ WSL thì WSL tự tắt → docker + brain tắt.
-> 💡 Hiệu năng: nên để repo trong filesystem WSL (`~/…`) thay vì `/mnt/d/…`.
-</details>
-
-<details>
-<summary><b>🍎 macOS</b></summary>
+### Bước 2 — Khởi động bằng **1 lệnh**, mọi hệ điều hành như nhau
 
 ```bash
-bash knowledge/brain/stack/brain-up.sh
+cd knowledge && npm run brain
 ```
-</details>
+
+Launcher tự dò môi trường (Docker Desktop / Docker Engine trong WSL / macOS / Linux), tự cấp cổng
+trống, kéo image ALICE dựng sẵn về và chạy **nền**. Không cần source, không cần sửa file cấu hình,
+không phải giữ cửa sổ terminal — kể cả trên WSL.
+
+Xong, nó in ra đúng địa chỉ kèm cổng đã cấp.
+
+> 💡 **WSL:** chạy lệnh trong terminal WSL (Docker nằm trong đó). Nên để project trong filesystem
+> của WSL (`~/…`) thay vì `/mnt/d/…` cho nhanh.
 
 ### Bước 3 — Cấu hình LLM ngay trên app
 Mở **http://localhost:8090** — trang checklist hướng dẫn từng bước. Tóm tắt:

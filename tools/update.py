@@ -318,7 +318,10 @@ def main():
                 print("    - %s" % n)
             print("  Details: MIGRATIONS.md")
 
-        print("\n[update] Required final step: python tools/verify.py")
+        # `update` chỉ chép file template. Bản ứng dụng nằm trong image, và image chỉ được
+        # kéo về khi dựng lại — nói rõ ở đây, kẻo người dùng tưởng nâng cấp xong là xong.
+        print("\n[update] Next: `npm run verify` (required), then `npm run brain` to pull")
+        print("         the matching application image - update only refreshes template files.")
         return 0
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

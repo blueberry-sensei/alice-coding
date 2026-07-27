@@ -462,10 +462,10 @@ async function doctor() {
   const rc = python("tools/verify.py", []);
   if (rc !== 0) blocking++;
 
-  console.log(C.b("\nRaw commands (if you would rather skip npm):"));
-  console.log(C.d(IS_WIN
-    ? "  powershell -File brain\\stack\\brain-up.ps1\n  python tools\\verify.py\n  python brain\\sync\\sync.py"
-    : "  bash brain/stack/brain-up.sh\n  python3 tools/verify.py\n  python3 brain/sync/sync.py"));
+  // Khối "lệnh gốc" của bản cũ đã bỏ: từ 2.3.0 Node là bắt buộc (cả hai launcher gọi
+  // brain-env.js), nên nhánh "không dùng npm" không còn tồn tại trên thực tế. In nó ra chỉ
+  // mời người dùng đi đường đã hỏng.
+  console.log(C.d("\nEverything runs through npm: npm run brain | verify | sync | update"));
 
   console.log(blocking ? C.r(`\n${blocking} blocking issue(s). Fix them and run again.`)
                        : C.g("\nAll good."));

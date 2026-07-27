@@ -6,6 +6,16 @@ Quy ước version: **semver**. MAJOR đổi = có breaking change bắt buộc 
 
 ---
 
+## 2.3.6 — WSL không tự tắt VM nữa
+
+**Không breaking**, nhưng cần chạy `wsl --shutdown` MỘT lần.
+
+- Giữ WSL bằng tiến trình canh là sai hướng: nó chết ngay khi launcher thoát, và VM vẫn tắt
+  (`uptime` luôn "up 0 min") kéo theo Docker + brain.
+- `npm run brain` nay thêm `vmIdleTimeout=-1` vào `%USERPROFILE%\.wslconfig` — cơ chế chính
+  thức của WSL. Chỉ thêm khoá còn thiếu, không ghi đè cấu hình sẵn có.
+- Sau lần đầu: `wsl --shutdown` rồi `npm run brain`.
+
 ## 2.3.5 — WSL thật sự bind 0.0.0.0
 
 **Không breaking.** `npm run update` rồi `npm run brain`.

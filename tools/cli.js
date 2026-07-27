@@ -325,24 +325,42 @@ function get(url, ms = 2500) {
 /* -------------------------------------------------------------- commands */
 
 /**
- * Giữ WSL sống bằng một tiến trình `wsl.exe` NỀN chạy từ Windows.
+ * Giữ WSL không tự tắt — bằng cơ chế CHÍNH THỨC của WSL, không phải tiến trình canh.
  *
- * Tiến trình nền đặt bên trong distro là chưa đủ: WSL2 vẫn tắt VM khi không còn phiên
- * `wsl.exe` nào từ phía Windows — brain đang chạy ngon rồi vài phút sau chết, đúng triệu chứng
- * "vào được một lúc rồi This site can't be reached".
+ * Đã thử giữ bằng một `wsl.exe sleep infinity` nền: nó chết ngay khi launcher thoát
+ * (`pgrep` không thấy gì), và `uptime` trong distro luôn "up 0 min" → VM tắt/bật liên tục,
+ * kéo theo Docker và brain. Vá bằng tiến trình canh là sai hướng.
  *
- * Tiến trình này detach hẳn nên đóng terminal vẫn OK. Tắt: `npm run brain:down`.
+ * `vmIdleTimeout=-1` trong `%USERPROFILE%\.wslconfig` bảo WSL đừng tắt VM khi rảnh. Đây là
+ * file cấu hình của người dùng nên chỉ THÊM khoá còn thiếu, không ghi đè cái đang có.
+ * Có hiệu lực sau `wsl --shutdown` một lần.
+ *
+ * @returns {boolean} true nếu vừa sửa file (người dùng cần `wsl --shutdown`).
  */
-function keepWslAlive() {
-  const alive = tryRun("wsl", ["-e", "pgrep", "-f", "alice-brain-keepalive"]);
-  if (alive.ok && alive.out.trim()) return;
+function ensureWslNeverIdles() {
+  const home = process.env.USERPROFILE;
+  if (!home) return false;
+  const file = path.join(home, ".wslconfig");
+  let text = "";
+  try { text = fs.readFileSync(file, "utf8"); } catch { /* chưa có thì tạo mới */ }
+  if (/^\s*vmIdleTimeout\s*=/mi.test(text)) return false;
+
+  const line = "vmIdleTimeout=-1";
+  const NL = "\n";
+  let next;
+  if (/^\s*\[wsl2\]/mi.test(text)) {
+    next = text.replace(/^[ \t]*\[wsl2\].*$/mi, (m) => m + NL + line);
+  } else {
+    const head = text.trim() ? text.trimEnd() + NL + NL : "";
+    next = head + "[wsl2]" + NL + line + NL;
+  }
   try {
-    const { spawn } = require("child_process");
-    spawn("wsl", ["-e", "bash", "-c", "exec -a alice-brain-keepalive sleep infinity"],
-      { detached: true, stdio: "ignore", windowsHide: true }).unref();
-    console.log(C.d("Giữ WSL sống bằng một tiến trình nền của Windows (đóng terminal vẫn OK)."));
+    fs.writeFileSync(file, next);
+    console.log(C.y(`Đã thêm ${line} vào ${file} — WSL sẽ không tự tắt VM nữa.`));
+    return true;
   } catch (err) {
-    console.log(C.y(`Không giữ được phiên WSL (${err.message}) — WSL có thể tự tắt và brain tắt theo.`));
+    console.log(C.y(`Không ghi được ${file} (${err.message}). Thêm tay: [wsl2] / ${line}`));
+    return false;
   }
 }
 
@@ -370,8 +388,13 @@ function up() {
       console.log(C.y("Node chưa có trong WSL — launcher sẽ tự cài (không cần sudo)."));
     }
     console.log(C.d("→ brain-up.sh inside WSL (Docker CE)"));
+    const needsShutdown = ensureWslNeverIdles();
     const code = run("wsl", ["-e", "bash", "brain/stack/brain-up.sh"]);
-    if (code === 0) keepWslAlive();
+    if (code === 0 && needsShutdown) {
+      console.log(C.y("\nCấu hình WSL vừa đổi. Chạy MỘT lần rồi dựng lại thì brain mới thôi tự chết:"));
+      console.log(C.b("  wsl --shutdown"));
+      console.log(C.b("  npm run brain"));
+    }
     return code;
   }
   console.log(C.d("→ brain-up.sh"));

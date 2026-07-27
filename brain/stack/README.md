@@ -26,7 +26,12 @@ chạy song song không đụng nhau và **không có đường nào nhìn thấ
 | `dev` | Đặt **cả hai** `ALICE_APP_PATH` và `ALICE_CORE_PATH` trong `.env` của brain | Chồng `compose.dev.yaml`, build từ source trên máy, tag `…:dev-<BRAIN_ID>` |
 
 `npm run brain:status` in ra đang ở chế độ nào. Đổi image nguồn (registry riêng, tag cố định)
-bằng `ALICE_IMAGE_API` / `ALICE_IMAGE_WEB` trong `.env` của brain.
+bằng `ALICE_IMAGE_API` / `ALICE_IMAGE_WEB` trong `.env` của brain — không bị khoá vào GHCR.
+
+Engine ALICE CORE vào image `api` qua stage `alicecore`, và stage đó được thoả bằng **một trong
+hai** cách cho ra cây thư mục giống hệt nhau: image `ghcr.io/<owner>/alice-core` (CI) hoặc thư
+mục local ghi đè bằng `--build-context` (dev). Nhờ vậy không có chuyện "CI build được mà máy
+mình thì không".
 
 > **Cổng API không nướng vào image.** Web đọc cổng lúc chạy (`SAG_PUBLIC_API_PORT` → nhúng vào
 > HTML → `lib/api.ts`), nên cùng một image dùng cho mọi project mà web của project này không

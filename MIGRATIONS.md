@@ -6,6 +6,13 @@ Quy ước version: **semver**. MAJOR đổi = có breaking change bắt buộc 
 
 ---
 
+## 2.3.3 — WSL in luôn URL theo IP distro
+
+**Không breaking.** `npm run update` rồi `npm run brain`.
+
+- WSL2 không phải máy nào cũng bật localhost-forwarding. Launcher nay in thêm
+  `http://<ip-distro>:<port>` — đường luôn mở được từ Windows.
+
 ## 2.3.2 — WSL mở lại được localhost
 
 **Không breaking.** `npm run update` rồi `npm run brain`.

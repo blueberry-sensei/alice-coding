@@ -152,4 +152,10 @@ if grep -qiE "microsoft|wsl" /proc/version 2>/dev/null; then
   fi
   echo "==> WSL: a background process keeps the distro alive. Closing this terminal is fine."
   echo "    Stop it for good: npm run brain:down"
+  # localhost-forwarding của WSL2 không phải lúc nào cũng bật. In luôn URL theo IP của distro
+  # để có đường chắc chắn mở được từ Windows, khỏi phải đi dò.
+  WSL_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  if [ -n "$WSL_IP" ]; then
+    echo "    localhost not reachable from Windows? Use: http://${WSL_IP}:${WEB_PORT}"
+  fi
 fi

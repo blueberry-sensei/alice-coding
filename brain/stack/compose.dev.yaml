@@ -1,0 +1,32 @@
+# Override CHỈ dành cho người phát triển chính `alice-brain` / `alice-core`.
+#
+# Người dùng bình thường KHÔNG cần file này: `compose.yaml` kéo image dựng sẵn về là chạy.
+# Launcher tự chồng file này lên khi thấy `ALICE_APP_PATH` được đặt trong .env của brain —
+# nghĩa là "tôi có source trên máy, hãy build từ đó thay vì dùng image đã publish".
+#
+#   docker compose -p "$BRAIN_ID" -f compose.yaml -f compose.dev.yaml up -d --build
+#
+# Tag image build ra mang `BRAIN_ID` để hai project cùng ở chế độ dev không ghi đè image
+# của nhau, và để không bao giờ đụng vào tag đã pull từ registry.
+
+services:
+  api:
+    build:
+      context: ${ALICE_APP_PATH}/apps/api
+      dockerfile: Dockerfile
+      # Engine ALICE CORE nằm ở repo RIÊNG (${ALICE_CORE_PATH}) để dùng chung cho nhiều
+      # project. additional_contexts đưa nó vào build mà không nhân bản file.
+      # Cần Docker Compose >= 2.17 + BuildKit.
+      additional_contexts:
+        alicecore: ${ALICE_CORE_PATH}
+      args:
+        SAG_API_EXTRAS: ""
+    image: alice-brain-api:dev-${BRAIN_ID}
+    pull_policy: never
+
+  web:
+    build:
+      context: ${ALICE_APP_PATH}/apps/web
+      dockerfile: Dockerfile
+    image: alice-brain-web:dev-${BRAIN_ID}
+    pull_policy: never

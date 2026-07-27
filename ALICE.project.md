@@ -1,6 +1,6 @@
 # ALICE.project.md — Đặc tả project ‹chưa init›
 
-> **File này thuộc về project của bạn.** [`ALICE.md`](ALICE.md) (hiến pháp, thuộc template) sẽ bị `python tools/update.py` ghi đè khi có bản mới; **file này thì không bao giờ**.
+> **File này thuộc về project của bạn.** [`ALICE.md`](ALICE.md) (hiến pháp, thuộc template) sẽ bị `npm run update` ghi đè khi có bản mới; **file này thì không bao giờ**.
 > Vì vậy mọi thứ đặc thù project đều nằm ở đây, không nhồi vào `ALICE.md`.
 >
 > [`INITIALIZATION.md`](INITIALIZATION.md) điền file này từ source thật. Chưa init thì các mục dưới còn nguyên `‹đặc tả khi init›`.

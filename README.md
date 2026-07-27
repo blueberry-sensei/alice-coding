@@ -5,7 +5,7 @@
 ### Biến bất kỳ AI coding agent nào thành cộng sự **kỷ luật · trung thực · có trí nhớ dài hạn** — *không bao giờ quên context.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.1.2-6E56CF)](VERSION)
+[![Version](https://img.shields.io/badge/version-2.3.0-6E56CF)](VERSION)
 [![Engine](https://img.shields.io/badge/engine-ALICE%20CORE-6E56CF)](https://github.com/blueberry-sensei/alice-core)
 [![Embedding](https://img.shields.io/badge/embedding-bge--m3%20(local)-2EA043)](https://huggingface.co/BAAI/bge-m3)
 [![Runtime](https://img.shields.io/badge/runtime-Docker-2496ED?logo=docker&logoColor=white)](#-cài-đặt)
@@ -132,24 +132,23 @@ Dense RAG chấm điểm chunk theo độ giống vector → hay sót đúng th�
 > ```powershell
 > git clone https://github.com/blueberry-sensei/alice-coding.git knowledge; Remove-Item -Recurse -Force knowledge\.git
 > ```
-> ```powershell
-> powershell -File knowledge\brain\stack\brain-up.ps1
-> ```
 >
 > **🍎🐧 macOS / Linux / WSL:**
 > ```bash
 > git clone https://github.com/blueberry-sensei/alice-coding.git knowledge && rm -rf knowledge/.git
 > ```
-> ```bash
-> bash knowledge/brain/stack/brain-up.sh
-> ```
-> Trên **WSL**, launcher sẽ **stream log và GIỮ chạy** — **đừng đóng cửa sổ đó**. *(mac/Linux/Docker Desktop: chạy xong tự thoát.)*
 >
-> Rồi mở `http://localhost:3000` → **Settings → Models** → dán key Gemini. **Xong.**
+> Rồi **một lệnh** cho mọi hệ (launcher tự chọn script đúng môi trường):
+> ```bash
+> npm run brain
+> ```
+> Trên **WSL**, launcher sẽ **stream log và GIỮ chạy** — **đừng đóng cửa sổ đó**. *(mac/Linux/Docker Desktop: chạy xong tự thoát.)* Không có Node? Xem [lệnh gốc](#-cài-đặt) trong mục chi tiết bên dưới.
+>
+> Rồi mở `http://localhost:3000` → **Settings → Models** → thêm provider LLM (key Gemini free là đủ). **Xong.**
 >
 > Để agent dùng não: chạy **INITIALIZATION** (Bước 4) — agent tự nạp kiến thức repo + **tự cắm MCP**, rồi bạn **restart agent**.
 
-> ⚠️ **Xoá `knowledge/.git` sau khi clone** rồi **commit `knowledge/` vào repo project của bạn**. Tri thức là tài sản của project. Từ v2, nâng cấp template đi qua [`tools/update.py`](tools/update.py) chứ **không** qua `git pull` — nên không cần repo lồng repo nữa.
+> ⚠️ **Xoá `knowledge/.git` sau khi clone** rồi **commit `knowledge/` vào repo project của bạn**. Tri thức là tài sản của project. Từ v2, nâng cấp template đi qua `npm run update` chứ **không** qua `git pull` — nên không cần repo lồng repo nữa.
 
 ### 🟢 Có Node? Dùng lệnh npm cho gọn
 
@@ -211,7 +210,7 @@ git clone https://github.com/blueberry-sensei/alice-coding.git knowledge && rm -
 ```powershell
 powershell -File knowledge\brain\stack\brain-up.ps1
 ```
-Launcher tự clone [`alice-brain`](https://github.com/blueberry-sensei/alice-brain) + [`alice-core`](https://github.com/blueberry-sensei/alice-core), build, pull model. Không cần sửa `.env`.
+Launcher kéo image ALICE dựng sẵn về chạy, pull model. Không cần git, không cần source, không cần sửa `.env`.
 </details>
 
 <details>
@@ -236,8 +235,10 @@ bash knowledge/brain/stack/brain-up.sh
 ### Bước 3 — Cấu hình LLM ngay trên app
 Mở **http://localhost:8090** — trang checklist hướng dẫn từng bước. Tóm tắt:
 1. Mở **http://localhost:3000** → nhập tên tạo danh tính (vd `Alice`).
-2. **Settings → Models** → dán key **AIStudio/Gemini** (hoặc OpenRouter). ✅ *Embedding `bge-m3` đã chạy sẵn.*
+2. **Settings → Models** → thêm provider: key **AIStudio/Gemini** (hoặc OpenRouter). ✅ *Embedding `bge-m3` đã chạy sẵn.*
 3. Tạo 1 source thử + thêm text + search → xác nhận embedding & LLM chạy.
+
+App là **nơi duy nhất** cấu hình LLM — `.env` không còn biến `SAG_LLM_*`. Thêm được nhiều provider theo thứ tự ưu tiên: hết quota hay sai key thì hệ thống tự chuyển nhà và ghi rõ lý do trong **lịch sử gọi**. Key được mã hoá trước khi lưu nên không có gì để commit nhầm. Chi tiết: [brain/SETUP.md](brain/SETUP.md).
 
 ### Bước 4 — Chạy INITIALIZATION (agent tự làm phần còn lại)
 Mở agent (Codex/Claude) trong repo project và bảo:
@@ -249,8 +250,8 @@ Agent sẽ tự: **tinh luyện** repo → điền các file instance (`ALICE.pr
 <summary>Cắm MCP thủ công (chỉ khi cần — INITIALIZATION đã tự làm)</summary>
 
 stdio bridge — thêm vào config MCP của agent:
-- **Docker CE trong WSL** + agent Windows: `command:"wsl"`, `args:["-e","docker","exec","-i","alice-brain-api-1","python","-m","sag_api.mcp.server"]`
-- **Docker Desktop / Linux / agent trong WSL:** `command:"docker"`, `args:["exec","-i","alice-brain-api-1","python","-m","sag_api.mcp.server"]`
+- **Docker CE trong WSL** + agent Windows: `command:"wsl"`, `args:["-e","docker","exec","-i","<BRAIN_ID>-api-1","python","-m","sag_api.mcp.server"]`
+- **Docker Desktop / Linux / agent trong WSL:** `command:"docker"`, `args:["exec","-i","<BRAIN_ID>-api-1","python","-m","sag_api.mcp.server"]`
 - Hoặc HTTP: `http://localhost:8000/mcp/` + Bearer token. Chi tiết: [`brain/SETUP.md`](brain/SETUP.md) & [`sub-agents/mcp.md`](sub-agents/mcp.md).
 </details>
 
@@ -259,12 +260,12 @@ stdio bridge — thêm vào config MCP của agent:
 
 | Triệu chứng | Xử lý |
 |---|---|
-| Document **FAILED** khi extract | LLM chưa cấu hình / không phát JSON schema → dùng AIStudio-Gemini. |
-| Search rỗng / embedding lỗi | `docker compose logs embedding`; kiểm model: `docker compose exec embedding ollama list`. |
-| `brain-up` báo `ALICE_APP_PATH sai` | Chỉ xảy ra khi bạn tự đặt biến đó trong `.env`. Bỏ nó đi để launcher tự clone, hoặc trỏ đúng thư mục chứa `apps/api`. |
-| `sync.py` **dừng, báo ERROR** | Kho tri thức hỏng — đó là gate làm đúng việc. `python tools/verify.py` xem chi tiết, `--fix` nắn citation trôi dòng. |
-| `sync.py` báo **sai schema state** | `python brain/sync/sync.py --rebuild` (an toàn, file là source-of-truth). |
-| Đổi embedding model | `python brain/sync/sync.py --rebuild`. |
+| Document **FAILED** khi extract | Chưa có provider LLM, hoặc model không phát JSON schema → thêm provider ở **Settings → Models**; xem **lịch sử gọi** để biết nhà nào fail vì gì. |
+| Search rỗng / embedding lỗi | `npm run brain:logs`; embedding không tự đổi nhà (đổi model = đổi không gian vector) nên nó báo lỗi thẳng và để document FAILED. |
+| `brain-up` báo `ALICE_APP_PATH sai` | Chỉ xảy ra khi bạn tự đặt biến đó. Bỏ nó đi để dùng image dựng sẵn, hoặc trỏ đúng thư mục chứa `apps/api`. |
+| `sync` **dừng, báo ERROR** | Kho tri thức hỏng — đó là gate làm đúng việc. `npm run verify` xem chi tiết, `npm run verify:fix` nắn citation trôi dòng. |
+| `sync` báo **sai schema state** | `npm run sync:rebuild` (an toàn, file là source-of-truth). |
+| Đổi embedding model | `npm run sync:rebuild`. |
 | Lỗi `\r` khi chạy `.sh` trong WSL | Đã có `.gitattributes` ép LF; nếu vẫn dính, `dos2unix` file `.sh`. |
 
 Chi tiết vận hành: [`brain/stack/README.md`](brain/stack/README.md).
@@ -281,8 +282,8 @@ Sau khi init, mỗi task chỉ cần dán **vibe base-prompt** (INITIALIZATION i
 Hai lệnh bạn nên biết:
 
 ```bash
-python knowledge/tools/verify.py --fix    # kiểm & nắn kho tri thức
-python knowledge/brain/sync/sync.py       # đồng bộ file → não (tự verify trước)
+npm run verify:fix   # kiểm & nắn kho tri thức
+npm run sync         # đồng bộ file → não (tự verify trước)
 ```
 
 📚 Đọc thêm: [`ALICE.md`](ALICE.md) (hiến pháp) · [`ALICE.project.md`](ALICE.project.md) (đặc tả project) · [`brain/RETRIEVAL.md`](brain/RETRIEVAL.md) (giao thức query) · [`brain/KNOWLEDGE.md`](brain/KNOWLEDGE.md) (routine tự cải thiện) · [`UPGRADE.md`](UPGRADE.md).
@@ -292,7 +293,7 @@ python knowledge/brain/sync/sync.py       # đồng bộ file → não (tự ver
 ## ⬆️ Nâng cấp
 
 ```bash
-python knowledge/tools/update.py
+npm run update
 ```
 
 Một lệnh, không conflict. Ranh giới sở hữu là tuyệt đối:
@@ -355,3 +356,6 @@ ALICE CODING/  (clone vào ./knowledge của project)
 - Embedding: [BAAI/bge-m3](https://huggingface.co/BAAI/bge-m3).
 
 <div align="center"><sub>Made with 🤍 for những phiên vibe coding không mất trí nhớ.</sub></div>
+
+> `<BRAIN_ID>` là danh tính brain của **project này** — mỗi project một brain, nên tên khác nhau.
+> Đừng gõ tay: lấy nguyên khối cấu hình bằng `npm run mcp`, và lấy cổng bằng `npm run brain:status`.

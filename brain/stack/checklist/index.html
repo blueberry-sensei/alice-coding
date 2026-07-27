@@ -50,9 +50,8 @@
   <div class="step"><input type="checkbox" data-k="1">
     <div><h3>1. Khởi động stack — 1 lệnh</h3>
     <p class="muted">Từ thư mục gốc project (nơi đã pull ALICE CODING vào):</p>
-    <pre>Windows:  powershell -File knowledge\brain\stack\brain-up.ps1
-mac/Linux: bash knowledge/brain/stack/brain-up.sh</pre>
-    <p class="muted"><b>Docker CE trong WSL:</b> chạy lệnh mac/Linux <b>bên trong WSL</b>. <b>Docker Desktop:</b> lệnh nào cũng được.</p>
+    <pre>npm run brain</pre>
+    <p class="muted">Launcher tự chọn script đúng cho Windows / mac / Linux. <b>Docker CE trong WSL:</b> chạy lệnh này <b>bên trong WSL</b>. <b>Docker Desktop:</b> chạy ở đâu cũng được.</p>
     <p class="muted">Lần đầu sẽ build stack + tải model <code>bge-m3</code> (vài phút). Chờ tới khi services healthy.</p></div></div>
 
   <div class="step"><input type="checkbox" data-k="2">
@@ -61,7 +60,9 @@ mac/Linux: bash knowledge/brain/stack/brain-up.sh</pre>
 
   <div class="step"><input type="checkbox" data-k="3">
     <div><h3>3. Đặt credential LLM <span class="pill">trong app</span></h3>
-    <p><b>Settings → Models</b>: chọn provider &amp; dán key. Đề xuất <b>AIStudio (Gemini) free</b> — lấy key tại <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>. (Hoặc OpenRouter free.)</p>
+    <p><b>Settings → Models</b>: thêm provider &amp; dán key. Đề xuất <b>AIStudio (Gemini) free</b> — lấy key tại <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>. (Hoặc OpenRouter free.)</p>
+    <div class="note">Thêm được <b>nhiều provider</b> theo thứ tự ưu tiên: hết quota (429) hoặc sai key thì hệ thống tự chuyển sang provider kế và ghi lý do vào <b>lịch sử gọi</b> — không có thất bại im lặng.</div>
+    <div class="note">Đây là <b>nơi duy nhất</b> cấu hình LLM; <code>.env</code> không còn biến <code>SAG_LLM_*</code>. Key được mã hoá bằng khoá dẫn xuất từ <code>SAG_SECRET_KEY</code> → <b>đừng đổi</b> biến đó sau khi đã nhập key.</div>
     <div class="note">Embedding <code>bge-m3</code> đã <b>bundle sẵn chạy local</b> trong stack — <b>không cần</b> cấu hình gì cho embedding.</div></div></div>
 
   <div class="step"><input type="checkbox" data-k="4">
@@ -85,7 +86,7 @@ mac/Linux: bash knowledge/brain/stack/brain-up.sh</pre>
     <summary style="cursor:pointer;color:var(--muted);margin-top:20px">Trục trặc thường gặp</summary>
     <div class="note"><b>Document FAILED khi extract:</b> LLM không phát JSON đúng schema → đổi sang AIStudio/Gemini, hoặc giảm concurrency.</div>
     <div class="note"><b>Search không ra / embedding lỗi:</b> kiểm container <code>embedding</code> đã healthy chưa (<code>docker compose logs embedding</code>); model bge-m3 tải xong chưa.</div>
-    <div class="note"><b>Đổi model embedding sau khi có data:</b> chạy lại <code>python knowledge/brain/sync/sync.py --rebuild</code>.</div>
+    <div class="note"><b>Đổi model embedding sau khi có data:</b> chạy lại <code>npm run sync:rebuild</code>.</div>
   </details>
 
   <footer>File tĩnh, self-contained. Tiến độ lưu trong trình duyệt (localStorage). Chi tiết kỹ thuật: <code>knowledge/brain/README.md</code>.</footer>

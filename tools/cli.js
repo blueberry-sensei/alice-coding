@@ -62,42 +62,65 @@ function findDocker() {
   return null;
 }
 
-/** Dựng lại đúng bộ biến môi trường mà launcher đặt, để `docker compose` nội suy được. */
+const brainEnv = require(path.join(STACK, "brain-env.js"));
+
+/**
+ * Bộ biến môi trường cho `docker compose`, đọc từ file .env của brain — file này nằm NGOÀI
+ * repo (thư mục state của người dùng) vì nó chứa SAG_SECRET_KEY.
+ *
+ * Chỉ ĐỌC, không tạo: `status`/`list`/`mcp` chỉ đang hỏi thăm, không nên đẻ ra state cho một
+ * brain chưa từng dựng. Việc tạo là của `npm run brain`.
+ */
 function composeEnv() {
-  const envFile = path.join(STACK, ".env");
-  if (!fs.existsSync(envFile)) return null;
+  const info = brainEnv.peek();
+  if (!info.exists) return null;
   const map = {};
-  for (const line of fs.readFileSync(envFile, "utf8").split(/\r?\n/)) {
+  for (const line of fs.readFileSync(info.BRAIN_ENV_FILE, "utf8").split(/\r?\n/)) {
     const t = line.trim();
     if (!t || t.startsWith("#") || !t.includes("=")) continue;
     const i = t.indexOf("=");
     map[t.slice(0, i).trim()] = t.slice(i + 1).trim();
   }
-  const abs = (p, fallback) => {
-    let v = p || fallback;
-    return path.isAbsolute(v) ? path.normalize(v) : path.resolve(STACK, v);
+  const abs = (v, fallback) => {
+    const raw = v || fallback;
+    return path.isAbsolute(raw) ? path.normalize(raw) : path.resolve(STACK, raw);
   };
   return {
     ...process.env,
     // Mặc định trỏ tới thư mục launcher tự clone; .env có thể ép sang bản trên máy.
     ALICE_APP_PATH: abs(map.ALICE_APP_PATH, "alice-brain"),
     ALICE_CORE_PATH: abs(map.ALICE_CORE_PATH, "alice-core"),
-    BRAIN_DATA: abs(map.BRAIN_DATA, "../.sag-data"),
+    BRAIN_LOGS: path.join(ROOT, "brain", ".logs", "api"),
     SAG_SECRET_KEY: map.SAG_SECRET_KEY || "",
     BIND_ADDRESS: map.BIND_ADDRESS || "127.0.0.1",
+    WEB_PORT: info.WEB_PORT,
+    API_PORT: info.API_PORT,
+    CHECKLIST_PORT: info.CHECKLIST_PORT,
+    ALICE_APP_PATH: abs(map.ALICE_APP_PATH, "alice-brain"),
+    ALICE_CORE_PATH: abs(map.ALICE_CORE_PATH, "alice-core"),
+    _BRAIN_ID: info.BRAIN_ID,
+    _ENV_FILE: info.BRAIN_ENV_FILE,
+    _MODE: info.BRAIN_MODE,
   };
 }
 
 function compose(args) {
   const env = composeEnv();
   if (!env) {
-    console.error(C.r("Chưa có brain/stack/.env — brain chưa từng được dựng."));
+    console.error(C.r("Brain của project này chưa từng được dựng."));
     console.error("Chạy trước: " + C.b("npm run brain"));
     return 1;
   }
   const d = findDocker();
   if (!d) { console.error(C.r("Không tìm thấy Docker.") + " Chạy `npm run doctor`."); return 1; }
-  return run(d.cmd, [...d.pre, "compose", "--env-file", ".env", ...args], { cwd: STACK, env });
+  // `-p <BRAIN_ID>` là thứ tách brain của project này khỏi brain của project khác:
+  // container, network và named volume đều mang tiền tố đó.
+  // Bộ `-f` phải khớp với lúc `up`, nếu không compose nhìn ra một stack khác và
+  // `down` sẽ không tắt đúng cái vừa dựng.
+  return run(d.cmd,
+    [...d.pre, "compose", "-p", env._BRAIN_ID, ...brainEnv.composeFiles(env._MODE),
+     "--env-file", env._ENV_FILE, ...args],
+    { cwd: STACK, env });
 }
 
 /**
@@ -117,7 +140,9 @@ function uninstallTargets() {
   const dataDir = env ? env.BRAIN_DATA      // mặc định ../.sag-data (so với brain/stack)
                       : path.resolve(STACK, "../.sag-data");
   return [
-    { p: dataDir, what: "dữ liệu não (SQLite + LanceDB + model ollama)" },
+    // Dữ liệu não nay nằm trong NAMED VOLUME của Docker (`down --volumes` ở trên xoá nó).
+    // Thư mục dưới đây chỉ còn là tàn dư của bản trước khi chuyển sang volume.
+    { p: dataDir, what: "dữ liệu não bản cũ (bind-mount, nếu còn sót)" },
     { p: path.join(STACK, "alice-brain"), what: "source ứng dụng do launcher clone" },
     { p: path.join(STACK, "alice-core"), what: "source engine do launcher clone" },
     { p: path.join(STACK, ".env"), what: "cấu hình stack (chứa SAG_SECRET_KEY)" },
@@ -157,11 +182,12 @@ function uninstall(argv) {
   } else {
     const env = composeEnv();
     const viaCompose = env && run(d.cmd,
-      [...d.pre, "compose", "--env-file", ".env", "down",
+      [...d.pre, "compose", "-p", env._BRAIN_ID, ...brainEnv.composeFiles(env._MODE),
+       "--env-file", env._ENV_FILE, "down",
        "--volumes", "--remove-orphans", "--rmi", "local"], { cwd: STACK, env }) === 0;
-    if (!viaCompose) {                      // .env mất hoặc compose lỗi -> dọn theo label
+    if (!viaCompose) {                      // state mất hoặc compose lỗi -> dọn theo label
       const ids = tryRun(d.cmd, [...d.pre, "ps", "-aq", "--filter",
-        "label=com.docker.compose.project=alice-brain"]).out.split(/\s+/).filter(Boolean);
+        `label=com.docker.compose.project=${brainEnv.brainId()}`]).out.split(/\s+/).filter(Boolean);
       if (ids.length && run(d.cmd, [...d.pre, "rm", "-f", ...ids]) !== 0) failed = true;
     }
   }
@@ -290,17 +316,50 @@ function python(scriptRel, args) {
 
 async function status() {
   const d = findDocker();
-  console.log(C.b("Container:"));
-  if (d) run(d.cmd, [...d.pre, "ps", "--filter", "label=com.docker.compose.project=alice-brain",
+  const info = brainEnv.peek();
+  console.log(C.b("Brain của project này:"));
+  console.log(`  ${info.BRAIN_ID}` + (info.exists ? "" : C.y("  [chưa dựng bao giờ]")));
+  console.log(C.d(`  chế độ: ${info.BRAIN_MODE === "dev" ? "dev — build từ source trên máy" : "image dựng sẵn"}`));
+  console.log(C.b("\nContainer:"));
+  if (d) run(d.cmd, [...d.pre, "ps", "--filter",
+                     `label=com.docker.compose.project=${info.BRAIN_ID}`,
                      "--format", "  {{.Names}}\t{{.Status}}"]);
   else console.log(C.r("  Không tìm thấy Docker."));
   console.log(C.b("\nDịch vụ:"));
-  const ready = await get("http://localhost:8000/api/v1/system/ready");
-  console.log(`  API  http://localhost:8000  ${ready && ready.status === 200 ? C.g("sẵn sàng") : C.r("chưa lên")}`);
-  const web = await get("http://localhost:3000");
-  console.log(`  Web  http://localhost:3000  ${web ? C.g("sẵn sàng") : C.r("chưa lên")}`);
-  const cl = await get("http://localhost:8090");
-  console.log(`  Checklist http://localhost:8090  ${cl ? C.g("sẵn sàng") : C.r("chưa lên")}`);
+  const probes = [
+    ["API      ", `http://localhost:${info.API_PORT}`, "/api/v1/system/ready"],
+    ["Web      ", `http://localhost:${info.WEB_PORT}`, ""],
+    ["Checklist", `http://localhost:${info.CHECKLIST_PORT}`, ""],
+  ];
+  for (const [label, base, probe] of probes) {
+    const res = await get(base + probe);
+    const up = probe ? res && res.status === 200 : Boolean(res);
+    console.log(`  ${label} ${base}  ${up ? C.g("sẵn sàng") : C.r("chưa lên")}`);
+  }
+  return 0;
+}
+
+/** Mọi brain trên máy này — để biết project nào đang chiếm cổng nào, và cái nào còn chạy. */
+async function list() {
+  const brains = brainEnv.listBrains();
+  if (!brains.length) {
+    console.log(C.y("Chưa có brain nào trên máy này.") + " Dựng: " + C.b("npm run brain"));
+    return 0;
+  }
+  const d = findDocker();
+  const running = new Set();
+  if (d) {
+    const out = tryRun(d.cmd, [...d.pre, "ps", "--format", "{{.Label \"com.docker.compose.project\"}}"]).out;
+    for (const name of out.split(/\r?\n/)) if (name.trim()) running.add(name.trim());
+  }
+  const here = brainEnv.brainId();
+  console.log(C.b("Brain trên máy này:"));
+  for (const brain of brains) {
+    const mark = brain.id === here ? C.g(" ← project hiện tại") : "";
+    const state = running.has(brain.id) ? C.g("đang chạy") : C.d("đã tắt  ");
+    console.log(`  ${state}  ${brain.id.padEnd(34)} web ${brain.web} · api ${brain.api} · checklist ${brain.checklist}${mark}`);
+  }
+  console.log(C.d("\nMỗi brain là một compose project riêng: container, network và volume đều tách."));
   return 0;
 }
 
@@ -309,8 +368,8 @@ function mcp() {
   const wsl = d && d.kind === "wsl";
   const cmd = wsl ? "wsl" : "docker";
   const args = wsl
-    ? ["-e", "docker", "exec", "-i", "alice-brain-api-1", "python", "-m", "sag_api.mcp.server"]
-    : ["exec", "-i", "alice-brain-api-1", "python", "-m", "sag_api.mcp.server"];
+    ? ["-e", "docker", "exec", "-i", `${brainEnv.brainId()}-api-1`, "python", "-m", "sag_api.mcp.server"]
+    : ["exec", "-i", `${brainEnv.brainId()}-api-1`, "python", "-m", "sag_api.mcp.server"];
   console.log(C.b("Cấu hình MCP cho agent (stdio bridge)\n"));
   console.log(C.d("Claude Code:"));
   console.log(`  claude mcp add brain -- ${cmd} ${args.join(" ")}\n`);
@@ -382,6 +441,8 @@ const [cmd, ...rest] = process.argv.slice(2);
     case "uninstall":process.exit(uninstall(rest));
     case "reset":    process.exit(reset(rest));
     case "status":   process.exit(await status());
+    case "list":     process.exit(await list());
+    case "pull":     process.exit(compose(["exec", "-T", "embedding", "ollama", "pull", "bge-m3"]));
     case "verify":   process.exit(python("tools/verify.py", rest));
     case "sync":     process.exit(python("brain/sync/sync.py", rest));
     case "update":   process.exit(python("tools/update.py", rest));
@@ -393,7 +454,9 @@ const [cmd, ...rest] = process.argv.slice(2);
   doctor    kiểm môi trường (Docker/Python/API/LLM/kho tri thức)
   up        dựng brain stack (tự chọn launcher đúng môi trường)
   down      tắt stack          restart   khởi động lại
-  status    trạng thái         logs      xem log (-f)
+  status    trạng thái brain của project này
+  list      MỌI brain trên máy (id, cổng, đang chạy hay không)
+  logs      xem log (-f)       pull      kéo lại model embedding
   uninstall gỡ Docker + runtime brain (GIỮ tri thức)      cần --yes
   reset     XOÁ tri thức project + kéo lại template mới   cần --yes
   verify    kiểm kho tri thức  sync      đồng bộ file -> não

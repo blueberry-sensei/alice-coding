@@ -22,4 +22,4 @@ Copy khối dưới, dán lên **đầu** `LOG.md`. ID lấy số kế tiếp, *
 - **Phòng lần sau** phải là **kiểm tra cụ thể làm được**, không phải lời hứa. Xấu: *"cẩn thận hơn"*. Tốt: *"trước khi đổi handler webhook, grep tất cả nơi gọi `retry(` và kiểm idempotency key"*.
 - Trích code thì dùng dạng `` `path:line#anchor` `` để `tools/verify.py` bắt được khi code trôi.
 
-`python tools/verify.py` kiểm: ID duy nhất & đúng định dạng, đủ 6 phần, trạng thái hợp lệ, đích `SUPERSEDED` tồn tại, citation còn resolve.
+`npm run verify` kiểm: ID duy nhất & đúng định dạng, đủ 6 phần, trạng thái hợp lệ, đích `SUPERSEDED` tồn tại, citation còn resolve.

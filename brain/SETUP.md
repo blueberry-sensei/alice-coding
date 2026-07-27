@@ -1,33 +1,49 @@
 # brain / SETUP — Dựng "não" (1 lệnh) + cấu hình trong app
 
-Luồng đơn giản: **pull → 1 lệnh → mở checklist → set LLM key trong app → chạy INITIALIZATION từ Claude/Codex desktop**. Embedding `bge-m3` đã **bundled local** trong stack — không phải set tay.
+Luồng đơn giản: **pull → 1 lệnh → mở checklist → thêm provider LLM trong app → chạy INITIALIZATION từ Claude/Codex desktop**. Embedding `bge-m3` đã **bundled local** trong stack — không phải set tay.
 
 ## Yêu cầu
 - **Docker** (Docker Desktop, hoặc Docker CE trong WSL) đang chạy.
-- **Internet** cho lần đầu (launcher tự tải SAG `v1.3.0` + model `bge-m3`).
+- **Internet** cho lần đầu (kéo image ALICE + model `bge-m3`).
 - (Để chạy INITIALIZATION) **Claude Desktop** hoặc **Codex Desktop**.
 
 ## Bước 1 — Một lệnh khởi động
 ```bash
-# Windows
-powershell -File knowledge\brain\stack\brain-up.ps1
-# mac/Linux
-bash knowledge/brain/stack/brain-up.sh
+npm run brain
 ```
-Chạy **một lần là xong**: launcher tự tạo `.env`, sinh `SAG_SECRET_KEY`, **tự clone SAG (ghim `v1.3.0`)**, tự chọn `BIND_ADDRESS` (WSL → `0.0.0.0`), build + chạy + pull `bge-m3`. **Không cần sửa `.env` tay.** Vận hành/log/dừng: [stack/README.md](stack/README.md).
+Chạy **một lần là xong**: launcher tự chọn script đúng môi trường, tính `BRAIN_ID` riêng cho project, cấp cổng trống, sinh `SAG_SECRET_KEY` (lưu **ngoài repo**), **kéo image dựng sẵn** + chạy **nền** + pull `bge-m3`. **Không cần git, không cần source, không cần sửa `.env` tay.**
+
+> **Mỗi project một brain.** Máy đã có brain của project khác thì cứ chạy tiếp — launcher tự né cổng và tự tách dữ liệu. `npm run brain:list` cho biết máy đang có brain nào.
+>
+> **Cổng không cố định.** Mọi URL dưới đây dùng `3000`/`8000` làm ví dụ; lấy cổng thật bằng `npm run brain:status`.
+
+Vận hành/log/dừng: [stack/README.md](stack/README.md).
 
 ## Bước 2 — Làm theo checklist trên app
 Mở **http://localhost:8090** (trang checklist) và tick từng bước. Tóm tắt:
 1. **http://localhost:3000** → nhập tên tạo identity (vd `Alice`).
-2. **Settings → Models** → dán key LLM. Đề xuất **AIStudio/Gemini free** ([lấy key](https://aistudio.google.com/apikey)) hoặc OpenRouter free. *Embedding không cần set — đã bundled `bge-m3`.*
+2. **Settings → Models** → thêm provider LLM. Đề xuất **AIStudio/Gemini free** ([lấy key](https://aistudio.google.com/apikey)) hoặc OpenRouter free. *Embedding không cần set — đã bundled `bge-m3`.*
 3. Tạo source thử + ingest 1 đoạn text + search → xác nhận embedding & LLM chạy.
 
-> **Không mở được web UI (vd firewall Windows↔WSL)?** Khỏi cần UI — set LLM thẳng trong `brain/stack/.env` rồi chạy lại `brain-up`:
-> ```env
-> SAG_LLM_PROVIDER=gemini
-> SAG_LLM_MODEL=gemini-2.0-flash
-> SAG_LLM_API_KEY=<key AIStudio>
-> ```
+### Nhiều provider, tự chuyển nhà khi hết quota
+
+Thêm được nhiều provider và xếp **thứ tự ưu tiên**. Hệ thống luôn bắt đầu từ ưu tiên cao nhất còn khoẻ:
+
+| Tình huống | Xử lý |
+| --- | --- |
+| Timeout / kết nối / lỗi 5xx | Thử lại **cùng** provider (backoff) |
+| 429 / hết quota | Chuyển ngay sang provider kế, cho provider này nghỉ một lúc |
+| Sai API key / model không tồn tại | Tắt provider đó, chuyển nhà, **báo rõ lý do** |
+| Request không hợp lệ | Dừng luôn — đổi nhà cũng lỗi y vậy |
+
+Cần ép backend cụ thể (vd OpenRouter → `deepinfra/fp4`) thì điền vào ô **extra body**:
+`{"provider": {"order": ["deepinfra/fp4"], "allow_fallbacks": false}}`.
+
+Mọi lần gọi thất bại đều nằm trong **Settings → Models → lịch sử gọi**: provider nào, lỗi loại gì, lúc nào. Không có thất bại im lặng.
+
+> **API key nằm ở đâu?** Trong DB của brain, **đã mã hoá** bằng khoá dẫn xuất từ `SAG_SECRET_KEY`. Không có key nào nằm trong file thuộc repo, nên không sợ commit nhầm. Đổi `SAG_SECRET_KEY` = mất key đã lưu, phải nhập lại (tri thức không ảnh hưởng).
+>
+> **`.env` không còn cấu hình LLM.** Các biến `SAG_LLM_*` của bản cũ đã bỏ; còn sót trong `.env` thì xoá đi cho khỏi tưởng là đã cấu hình.
 
 ## Bước 3 — Nối "não" vào agent (MCP)
 
@@ -37,15 +53,15 @@ Agent chạy MCP server *bên trong container* rồi nối qua stdio → bỏ qu
   ```json
   { "mcpServers": { "brain": {
       "command": "wsl",
-      "args": ["-e","docker","exec","-i","alice-brain-api-1","python","-m","sag_api.mcp.server"] } } }
+      "args": ["-e","docker","exec","-i","<BRAIN_ID>-api-1","python","-m","sag_api.mcp.server"] } } }
   ```
 - **Docker Desktop / Linux / agent chạy trong WSL** (bỏ `wsl -e`):
   ```json
   { "mcpServers": { "brain": {
       "command": "docker",
-      "args": ["exec","-i","alice-brain-api-1","python","-m","sag_api.mcp.server"] } } }
+      "args": ["exec","-i","<BRAIN_ID>-api-1","python","-m","sag_api.mcp.server"] } } }
   ```
-  - Codex: khai báo ở `~/.codex/config.toml` mục `[mcp_servers.brain]` (`command`/`args` như trên). Claude Desktop: `claude_desktop_config.json`. Điều kiện: stack đang chạy (container `alice-brain-api-1`).
+  - Codex: khai báo ở `~/.codex/config.toml` mục `[mcp_servers.brain]` (`command`/`args` như trên). Claude Desktop: `claude_desktop_config.json`. Điều kiện: stack đang chạy (container `<BRAIN_ID>-api-1`).
 
 **Cách B — HTTP MCP (chỉ khi Windows với tới được WSL, vd Docker Desktop / mirrored):** URL `http://localhost:8000/mcp/` + header `Authorization: Bearer <token>` (token: `POST /api/v1/auth/login`). VD Claude Code: `claude mcp add --transport http brain "http://localhost:8000/mcp/" --header "Authorization: Bearer <TOKEN>"`. Chi tiết: [../sub-agents/mcp.md](../sub-agents/mcp.md).
 
@@ -54,12 +70,28 @@ Mở Claude/Codex desktop trong repo project → *"Đọc và chạy knowledge/I
 
 ## Đổi cấu hình sau này
 - LLM/embedding: **Settings → Models** trên app (runtime, không cần rebuild).
-- Đổi **embedding model** → nhớ `python knowledge/brain/sync/sync.py --rebuild` (tránh lệch chiều vector).
+- Đổi **embedding model** → nhớ `npm run sync:rebuild` (tránh lệch chiều vector).
+
+## Log — tìm ở đâu khi có lỗi
+
+Mọi tầng đều ghi ra file local, không chỉ ra terminal:
+
+| Log | Đường dẫn | Gồm gì |
+| --- | --- | --- |
+| API + engine | `brain/.logs/api/sag-api.log` | Request, ingest, extract, mọi lần gọi provider, traceback. Xoay vòng 20 MB × 5 bản |
+| Dựng stack | `brain/.logs/brain-up.log` | Toàn bộ output của launcher (clone, build, pull model) |
+| Sync tri thức | `brain/.logs/sync.log` | Từng file được ingest/update/delete, kèm traceback nếu lỗi |
+| Container | `npm run brain:logs` | stdout của cả ba container |
+
+Mỗi dòng log của API có `request_id`; lấy id đó lần được cả chuỗi xử lý một request qua các tầng.
 
 ## Trục trặc
-- **api `unhealthy` + `ValidationError: sag_language`:** SAG chỉ nhận `en`/`zh` (không có `vi`) → đặt `SAG_SAG_LANGUAGE=en` trong `.env` rồi chạy lại.
-- **AI trả lời tiếng Trung:** SAG (gốc Trung) + model DeepSeek hay mặc định tiếng Trung. Vào **Settings → Assistant** đặt chỉ dẫn *"Always respond in Vietnamese"*, hoặc dùng **Gemini**; giữ `SAG_SAG_LANGUAGE=en` (cờ này chỉ `zh`/`en`, không có `vi` — và nó là ngôn ngữ *prompt* nội bộ, không phải ngôn ngữ *câu trả lời*). UI tiếng Trung → icon **文A** đổi giao diện.
-- **Document FAILED (extract):** LLM chưa cấu hình / không phát JSON schema → set AIStudio-Gemini.
-- **Embedding lỗi / search rỗng:** `docker compose logs embedding`; kiểm model đã pull: `docker compose exec embedding ollama list`.
-- **`sync.py` không kết nối:** kiểm `docker compose ps` + `http://localhost:8000/api/v1/system/ready`.
-- Chi tiết vận hành stack + chạy thủ công (không launcher): [stack/README.md](stack/README.md).
+- **api `unhealthy` + `ValidationError: sag_language`:** cờ này chỉ nhận `en` hoặc `vi` → đặt `SAG_SAG_LANGUAGE=en` trong `.env` rồi chạy lại `npm run brain`.
+- **AI trả lời sai ngôn ngữ:** vào **Settings → Assistant** đặt chỉ dẫn *"Always respond in Vietnamese"*. `SAG_SAG_LANGUAGE` là ngôn ngữ **prompt trích xuất** nội bộ, không phải ngôn ngữ câu trả lời — giữ `en` cho model bám JSON schema ổn định.
+- **Document FAILED (extract):** chưa có provider LLM nào, hoặc model không phát được JSON schema → thêm provider ở **Settings → Models** và xem **lịch sử gọi** để biết provider nào fail vì gì.
+- **Embedding lỗi / search rỗng:** embedding **không** đổi nhà khi lỗi (đổi model = đổi không gian vector), nên nó thử lại rồi báo lỗi thẳng và để document ở trạng thái FAILED. Xem `npm run brain:logs`; kiểm model đã pull: `npm run brain:status`.
+- **Sync không kết nối:** `npm run brain:status`, rồi mở `http://localhost:8000/api/v1/system/ready`.
+- Chi tiết vận hành stack: [stack/README.md](stack/README.md).
+
+> `<BRAIN_ID>` là danh tính brain của **project này** — mỗi project một brain, nên tên khác nhau.
+> Đừng gõ tay: lấy nguyên khối cấu hình bằng `npm run mcp`, và lấy cổng bằng `npm run brain:status`.

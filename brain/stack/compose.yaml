@@ -1,19 +1,29 @@
 # ALICE CODING — brain stack (self-contained).
 # ALICE api+web (fork riêng) + embedding bge-m3 (bundled, local) + trang checklist.
-# Chạy 1 lệnh qua launcher (tự tính path tuyệt đối + pull model):
-#   Windows:   powershell -File brain-up.ps1
-#   mac/Linux: bash brain-up.sh
-# Launcher TỰ clone hai repo nguồn; chỉ khi chạy compose thủ công mới phải tự
-# đặt ALICE_APP_PATH + ALICE_CORE_PATH + BRAIN_DATA (tuyệt đối) + SAG_SECRET_KEY rồi:
-#   docker compose --env-file .env up -d --build
-name: alice-brain
+#
+# MỖI PROJECT MỘT BRAIN. Tên compose project (`-p <BRAIN_ID>`) do launcher suy ra từ đường dẫn
+# tuyệt đối của kho tri thức, nên hai project khác nhau không bao giờ đụng container hay port.
+# Volume ở đây là NAMED volume → Docker tự thêm tiền tố `<BRAIN_ID>_`, dữ liệu cách ly sẵn,
+# không cần đặt tên tay và không có đường nào để hai brain nhìn thấy dữ liệu của nhau.
+#
+# KHÔNG đặt `name:` ở file này: đặt là ghim cứng một project name cho mọi cài đặt, đúng thứ
+# vừa gỡ bỏ. Tên đến từ `-p` của launcher.
+#
+# File này chỉ PULL IMAGE dựng sẵn — người dùng không cần git, không cần source, không phải
+# build gì. Muốn build từ source trên máy (chỉ dành cho người phát triển chính alice-brain /
+# alice-core) thì chồng thêm `compose.dev.yaml`; launcher tự làm việc đó khi thấy
+# ALICE_APP_PATH được đặt trong .env của brain.
+#
+# Chạy 1 lệnh: npm run brain
+# Chạy compose thủ công thì phải tự đặt BRAIN_ID, BRAIN_LOGS (tuyệt đối), SAG_SECRET_KEY rồi:
+#   docker compose -p "$BRAIN_ID" --env-file <state>/.env up -d
 
 services:
   # ── Embedding bge-m3 (local, bundled; OpenAI-compatible qua Ollama) ──
   embedding:
     image: ollama/ollama:latest
     volumes:
-      - ${BRAIN_DATA}/ollama:/root/.ollama
+      - ollama:/root/.ollama
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 10s
@@ -22,40 +32,39 @@ services:
       start_period: 20s
     restart: unless-stopped
 
-  # ── ALICE backend (build từ fork tại ${ALICE_APP_PATH}) ──
+  # ── ALICE backend ──
   api:
-    build:
-      context: ${ALICE_APP_PATH}/apps/api
-      dockerfile: Dockerfile
-      # Engine ALICE CORE nằm ở repo RIÊNG (${ALICE_CORE_PATH}) để dùng chung cho
-      # nhiều project. additional_contexts đưa nó vào build mà không nhân bản file.
-      # Cần Docker Compose >= 2.17 + BuildKit.
-      additional_contexts:
-        alicecore: ${ALICE_CORE_PATH}
-      args:
-        SAG_API_EXTRAS: ""
+    # Image dựng sẵn, kéo về là chạy. Engine ALICE CORE đã nằm sẵn trong image này.
+    image: ${ALICE_IMAGE_API:-ghcr.io/blueberry-sensei/alice-brain-api:latest}
+    pull_policy: ${ALICE_PULL_POLICY:-missing}
     environment:
       SAG_ENVIRONMENT: dev
       SAG_DEBUG: "false"
-      SAG_SECRET_KEY: ${SAG_SECRET_KEY:?dat SAG_SECRET_KEY trong .env (openssl rand -hex 32)}
+      SAG_SECRET_KEY: ${SAG_SECRET_KEY:?thieu SAG_SECRET_KEY - chay `npm run brain` de launcher tu sinh}
       SAG_CORS_ORIGINS: http://localhost:${WEB_PORT:-3000}
       SAG_ALLOW_REGISTRATION: "false"
       SAG_DATABASE_URL: sqlite+aiosqlite:////data/sag.db
       SAG_DATA_DIR: /data/engine
       SAG_UPLOAD_DIR: /data/uploads
+      # Log ghi ra bind-mount để đọc thẳng bằng editor trên host. Xoay vòng 20MB × 5 bản.
+      SAG_LOG_DIR: /data/logs
       SAG_SAG_VECTOR_PROVIDER: lancedb
       SAG_SAG_LANGUAGE: ${SAG_SAG_LANGUAGE:-en}   # prompt trích xuất: 'en' | 'vi'
       # Embedding -> container bundled (không cần đụng tới)
       SAG_EMBEDDING_BASE_URL: http://embedding:11434/v1
       SAG_EMBEDDING_MODEL: ${SAG_EMBEDDING_MODEL:-bge-m3}
       SAG_EMBEDDING_API_KEY: "ollama"
-      # LLM: để trống -> cấu hình trong app (Settings → Models); hoặc điền qua .env
-      SAG_LLM_PROVIDER: ${SAG_LLM_PROVIDER:-openai}
-      SAG_LLM_BASE_URL: ${SAG_LLM_BASE_URL:-}
-      SAG_LLM_API_KEY: ${SAG_LLM_API_KEY:-}
-      SAG_LLM_MODEL: ${SAG_LLM_MODEL:-}
+      # LLM KHÔNG cấu hình ở đây. Nơi duy nhất là app: Settings → Models.
+      # Ở đó thêm được nhiều provider theo thứ tự ưu tiên (429/hết quota thì tự chuyển nhà),
+      # key được mã hoá bằng khoá dẫn xuất từ SAG_SECRET_KEY.
+      # Hệ quả: đừng đổi SAG_SECRET_KEY sau khi đã nhập key, đổi là phải nhập lại.
     volumes:
-      - ${BRAIN_DATA}/sag:/data
+      # DB + engine data + upload nằm trong NAMED VOLUME: không file nào của "não" nằm trong
+      # cây repo, nên không thể lỡ tay commit hay kéo theo khi copy thư mục project đi nơi khác.
+      - sagdata:/data
+      # Ngoại lệ có chủ đích: log vẫn bind ra host để đọc bằng editor thường. Log không chứa
+      # credential (key đã mã hoá trong DB, API không bao giờ in key ra).
+      - ${BRAIN_LOGS}:/data/logs
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${API_PORT:-8000}:8000"
     depends_on:
@@ -75,12 +84,13 @@ services:
 
   # ── ALICE web UI (nơi set credential LLM) ──
   web:
-    build:
-      context: ${ALICE_APP_PATH}/apps/web
-      dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_API_BASE: http://localhost:${API_PORT:-8000}
-        NEXT_PUBLIC_ENABLE_WINDOW_SCALING: "true"
+    image: ${ALICE_IMAGE_WEB:-ghcr.io/blueberry-sensei/alice-brain-web:latest}
+    pull_policy: ${ALICE_PULL_POLICY:-missing}
+    environment:
+      # Cổng API đọc lúc CHẠY rồi nhúng vào HTML (app/layout.tsx). KHÔNG nướng vào image:
+      # cùng một image web được mọi project dùng, mà mỗi project một cổng — nướng cứng là
+      # web của project này gọi sang API của project khác.
+      SAG_PUBLIC_API_PORT: ${API_PORT:-8000}
     depends_on:
       api:
         condition: service_healthy
@@ -96,3 +106,8 @@ services:
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${CHECKLIST_PORT:-8090}:80"
     restart: unless-stopped
+
+volumes:
+  # Tên thật là <BRAIN_ID>_sagdata / <BRAIN_ID>_ollama → mỗi project một bộ, không lẫn.
+  sagdata:
+  ollama:

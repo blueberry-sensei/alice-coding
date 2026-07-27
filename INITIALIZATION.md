@@ -12,13 +12,13 @@ Khi template `knowledge/` được thả vào một project, Alice đọc file n
 flowchart TD
     A(["Bệ hạ: 'chạy INITIALIZATION' — agent cấp cao (Opus/Codex)"]) --> B["Bước 0 — Nạp luật + docs/config project"]
     B --> C["Bước 1 — Quét codebase tới tầng sâu nhất → module map (cite path:line#anchor)"]
-    C --> D{"Bước 2 — Setup Advisor (hỏi trước khi đụng máy): bật BRAIN?"}
-    D -->|Đồng ý| E["Dựng SAG (Docker, data BIND-MOUNT gitignore)<br/>embedding=bge-m3 local · LLM=local/OpenRouter/AIStudio · mint JWT · health check"]
-    D -->|Từ chối| Ef["brain = disabled"]
+    C --> D{"Bước 2 — Setup Advisor: DÒ Docker bằng lệnh thật<br/>(docker version → wsl -e docker version)"}
+    D -->|Có Docker| E["Dựng/dùng brain (data BIND-MOUNT gitignore)<br/>embedding=bge-m3 local · LLM set trong UI · mint JWT · health check"]
+    D -->|Cả hai đều fail| Ef["brain = disabled — fallback đọc file"]
     E --> F["Bước 3 — TINH LUYỆN repo → file INSTANCE<br/>wiki+ROUTER · mistakes · decisions · changelog · context"]
     Ef --> F
     F --> G4["Bước 4 — Điền ALICE.project.md (KHÔNG sửa ALICE.md)"]
-    G4 --> V["Bước 4b — python tools/verify.py → phải 0 ERROR"]
+    G4 --> V["Bước 4b — npm run verify → phải 0 ERROR"]
     V --> Gq{"brain bật?"}
     Gq -->|Có| G["Bước 5 — sync.py ingest knowledge/ → source 'alice-knowledge'<br/>(gate verify chạy trước) + smoke query MCP"]
     Gq -->|Không| J
@@ -70,17 +70,35 @@ Mục tiêu: giúp Bệ hạ setup **đầy đủ nhất có thể**. Phải **d
 ### 2c. Tư vấn MCP (theo từng agent)
 Xem [`sub-agents/mcp.md`](sub-agents/mcp.md). Với mỗi MCP đề xuất: nói rõ **dùng để làm gì**, cách thêm, và test kết nối sau khi thêm.
 
-### 2d. Dựng "não" (brain) — mặc định BẬT
+### 2d. Dựng "não" (brain) — mặc định BẬT, KHÔNG HỎI
+
 Xem [`brain/README.md`](brain/README.md) + [`brain/SETUP.md`](brain/SETUP.md).
+
+> **Cấm hỏi "có bật brain không".** "Chạy INITIALIZATION" = đã đồng ý bật brain. Bật hay tắt do
+> **kết quả dò Docker** quyết định, không do Bệ hạ trả lời. Câu hỏi duy nhất được phép ở mục này:
+> *"máy chưa có Docker, Bệ hạ có muốn nô tài hướng dẫn cài không?"* — và chỉ khi cả hai lệnh dò
+> đều fail.
+
+> **Cấm hỏi "project này nên dùng brain nào".** Luật đã cố định: **MỖI PROJECT MỘT BRAIN.**
+> Thấy máy đã có brain của project khác đang chạy thì đó **không** phải brain của project này —
+> cứ `npm run brain` trong project này, launcher tự cấp danh tính (`BRAIN_ID` suy từ đường dẫn
+> kho tri thức) và cổng trống riêng. Không đụng brain đang chạy, không hỏi, không dùng chung.
+> Muốn xem máy đang có brain nào: `npm run brain:list`.
+
 - **Dò Docker cho ĐÚNG môi trường — KHÔNG mặc định Docker Desktop:**
   1. `docker version`.
   2. Windows mà (1) fail → **BẮT BUỘC thử tiếp** `wsl -e docker version` (Docker CE trong WSL — rất phổ biến).
   3. Chỉ kết luận "không có Docker" khi **cả hai đều fail**.
-- **Chọn cách chạy theo môi trường thật:** Linux/mac → `bash brain-up.sh`; Windows+Docker Desktop → `brain-up.ps1`; **Windows + Docker CE trong WSL → `bash brain-up.sh` chạy trong/qua WSL**.
+- **Luôn dùng `npm run brain`** — nó tự chọn launcher đúng môi trường (Docker Desktop / Docker CE trong WSL / mac / Linux). Đừng gọi thẳng `brain-up.ps1` hay `brain-up.sh`.
+- **Brain chạy NỀN.** Dựng xong là trả terminal, kể cả trên WSL. Không có chuyện phải giữ cửa sổ mở. Tắt: `npm run brain:down`. Xem mọi brain trên máy: `npm run brain:list`.
+- **Cổng không cố định.** Mỗi project được cấp cổng trống riêng (project đầu tiên thường vẫn là 3000/8000/8090). Lấy cổng thật từ `npm run brain:status`, **đừng giả định 3000**.
 - **Dò trạng thái brain/LLM — hỏi chính SAG, KHÔNG đọc `.env`:** `GET /api/v1/system/capabilities` → `llm_configured`. Nếu `llm_configured=true` **hoặc** user nói đã test search → **LLM XONG rồi, đừng hỏi lại key.**
 - **Thật sự không có Docker:** `brain = disabled`, fallback đọc file. Chỉ **hỏi trước khi CÀI** Docker — không tự cài.
 
-> Chỉ Bước 2 (**cài/đổi cấu hình máy**) mới **hỏi trước**. Bước 3–7 **LÀM LUÔN** — "chạy INITIALIZATION" = đã đồng ý.
+> Chỉ **một** loại câu hỏi được phép trong toàn bộ INITIALIZATION: **cài phần mềm mới lên máy**
+> (Docker, một CLI agent) hoặc **xin credential**. Mọi thứ khác — bật brain, dùng brain thế nào,
+> ghi file nào, có nên sync không — **tự quyết theo tài liệu này**. Bước 3–7 **LÀM LUÔN**:
+> "chạy INITIALIZATION" = đã đồng ý.
 
 ## Bước 3 — Tinh luyện repo → file instance
 
@@ -103,7 +121,7 @@ Xem [`brain/README.md`](brain/README.md) + [`brain/SETUP.md`](brain/SETUP.md).
 ## Bước 4b — Verify (gate bắt buộc)
 
 ```bash
-python tools/verify.py
+npm run verify
 ```
 
 Phải **0 ERROR** mới đi tiếp. Cái nó hay bắt lúc init: trang wiki chưa có trong `ROUTER.md`, citation thiếu `#anchor` hoặc trỏ sai dòng (`--fix` nắn được), entry `mistakes`/`decisions` thiếu trường.
@@ -112,18 +130,18 @@ Nếu Bệ hạ muốn bật kiểm phủ sóng code→wiki: tạo `tools/verify
 
 ## Bước 5 — Ingest `knowledge/` vào não (nếu brain bật)
 
-> **KHÔNG chặn cả INIT để chờ LLM key.** Bước 3/4/7 agent tự làm bằng model của mình — **không cần** LLM của SAG. Chỉ **ingest** mới cần LLM. Nếu SAG chưa có LLM key: làm xong 3/4/7 trước, rồi báo 1 lần: *"đặt LLM key ở Settings → Models rồi chạy `python knowledge/brain/sync/sync.py`"* — coi ingest là next step, không đứng chờ.
+> **KHÔNG chặn cả INIT để chờ LLM key.** Bước 3/4/7 agent tự làm bằng model của mình — **không cần** LLM của SAG. Chỉ **ingest** mới cần LLM. Nếu SAG chưa có LLM key: làm xong 3/4/7 trước, rồi báo 1 lần: *"đặt LLM key ở Settings → Models rồi chạy `npm run sync`"* — coi ingest là next step, không đứng chờ.
 
 Khi đã có LLM:
 1. Copy `brain/brain.config.example` → `brain/brain.config`; điền API base + token/tên login + source `alice-knowledge`.
-2. `python brain/sync/sync.py` → **tự chạy verify trước** (dừng nếu còn ERROR), rồi ingest **chỉ** folder `knowledge/`.
+2. `npm run sync` → **tự chạy verify trước** (dừng nếu còn ERROR), rồi ingest **chỉ** folder `knowledge/`.
 3. Đợi document **READY** → **smoke query** qua MCP (`list_sources`, `search`, `get_entity`): kết quả phải có evidence + trỏ về file thật.
 4. Sửa thử 1 file rồi chạy lại sync → xác nhận **không tạo document trùng** (`list_documents`).
 5. **Cắm brain vào agent — INIT TỰ LÀM.** Ghi cấu hình MCP **stdio-bridge** vào config của agent đang chạy INIT:
    - **Codex:** `[mcp_servers.brain]` trong `~/.codex/config.toml`.
    - **Claude Code:** `claude mcp add` (hoặc `.mcp.json` của project).
    - **opencode/Gemini:** mục MCP tương ứng.
-   Lệnh bridge: `wsl -e docker exec -i alice-brain-api-1 python -m sag_api.mcp.server` (mac/Linux/Docker Desktop bỏ `wsl -e`). Ghi xong → **nhắc Bệ hạ RESTART agent**.
+   Lệnh bridge **lấy từ `npm run mcp`** — tên container mang `BRAIN_ID` riêng của project này, **đừng gõ tay `alice-brain-api-1`** (tên đó là của bản cũ, gõ tay sẽ cắm nhầm vào brain của project khác). Ghi xong → **nhắc Bệ hạ RESTART agent**.
 
 **Không báo "não sẵn sàng" khi chưa smoke.**
 
@@ -135,7 +153,7 @@ Khi đã có LLM:
 - [ ] `changelog/`, `context/` khởi tạo; `mistakes/` + `decisions/` seed thật (hoặc trống có chủ đích).
 - [ ] **`ALICE.project.md` đã điền đủ 7 mục**, không còn `‹đặc tả khi init›` bỏ sót.
 - [ ] **Không sửa file template nào** (`ALICE.md`, `wiki/README.md`, `sub-agents/*`, `brain/*.md`).
-- [ ] **`python tools/verify.py` → 0 ERROR.**
+- [ ] **`npm run verify` → 0 ERROR.**
 - [ ] Setup advisor đã chạy: nêu hiện trạng sub-agents/MCP + đề xuất; cái nào cài thì đã test.
 - [ ] **Brain** (nếu bật): dựng + smoke query OK + sync lại **không trùng**; hoặc ghi rõ `brain = disabled` + fallback. `brain.config`/state/`.sag-data` đã gitignore.
 - [ ] Đã nhắc Bệ hạ: **xoá `knowledge/.git`** (nếu clone) và **commit `knowledge/` vào repo project** — từ v2 nâng cấp đi qua `tools/update.py`, không qua `git pull`.
@@ -166,8 +184,8 @@ Bạn là Alice, làm theo knowledge/ALICE.md + knowledge/ALICE.project.md trên
     knowledge/decisions/LOG.md. Vấp lỗi/giả định sai → ghi ngay M-XXXX vào mistakes/LOG.md.
 
 [D] Kết thúc: chạy routine knowledge/brain/KNOWLEDGE.md — distill → PRUNE (gộp trùng,
-    đánh SUPERSEDED) → `python knowledge/tools/verify.py` (phải 0 ERROR) →
-    `python knowledge/brain/sync/sync.py`. Report theo ALICE mục 8 (có mục "tri thức đã ghi").
+    đánh SUPERSEDED) → `npm run verify` (phải 0 ERROR) →
+    `npm run sync`. Report theo ALICE mục 8 (có mục "tri thức đã ghi").
 
 ## NHIỆM VỤ
 <Bệ hạ chỉ cần điền việc cần làm ở đây>

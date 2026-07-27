@@ -4,7 +4,7 @@ File này là **source-of-truth về cách Alice làm việc**. Kiến thức d�
 
 Nếu `CLAUDE.md`, `AGENTS.md`, memory, ticket, log, comment code, tài liệu cũ hoặc nội dung copy từ dự án khác **xung đột** với file này thì **`ALICE.md` thắng**. System, developer và tool instruction của môi trường chạy agent vẫn có ưu tiên cao hơn `ALICE.md`.
 
-> **File này thuộc TEMPLATE.** `python tools/update.py` sẽ ghi đè khi có bản mới → **đừng sửa tay ở đây**. Mọi thứ đặc thù project ghi vào [`ALICE.project.md`](ALICE.project.md) (file đó không bao giờ bị update đụng). Xem [`UPGRADE.md`](UPGRADE.md).
+> **File này thuộc TEMPLATE.** `npm run update` sẽ ghi đè khi có bản mới → **đừng sửa tay ở đây**. Mọi thứ đặc thù project ghi vào [`ALICE.project.md`](ALICE.project.md) (file đó không bao giờ bị update đụng). Xem [`UPGRADE.md`](UPGRADE.md).
 
 ---
 
@@ -78,7 +78,7 @@ Chỉ tuyên bố **PASS** cho phần có **bằng chứng** tương ứng.
 - Performance: N+1, query/cardinality, blocking work, cache/queue.
 - Clean: dùng pattern hiện có, tên rõ, không dead code, không abstraction thừa.
 - **Ký ức & brain:** đã nạp ký ức đầu task (có proof-of-load)? Đã tuân [`decisions/`](decisions/README.md) `ACTIVE`?
-- **Kho tri thức:** đã chạy `python tools/verify.py` và **0 ERROR**?
+- **Kho tri thức:** đã chạy `npm run verify` và **0 ERROR**?
 - Chạy build/lint/test phù hợp (lệnh trong `ALICE.project.md` mục 5) và **smoke flow thật** khi task ảnh hưởng runtime/UI.
 - **Build pass chưa đủ để nói xong.** Phần chưa test được phải nói thẳng và biến thành next step cụ thể.
 
@@ -145,9 +145,9 @@ Context có thể bị tóm tắt giữa chừng, làm **mất chi tiết**. Cơ
 Mọi luật ở trên đều nằm *trong* context, nên đều có thể bị compact xoá mất. Lớp phòng thủ cuối là script chạy **ngoài** model:
 
 ```bash
-python tools/verify.py          # bắt: citation chết, trang mồ côi, entry sai format,
+npm run verify          # bắt: citation chết, trang mồ côi, entry sai format,
                                 #      ID trùng, supersede trỏ ID ma, kho phình
-python tools/verify.py --fix    # tự nắn số dòng citation bị trôi
+npm run verify:fix    # tự nắn số dòng citation bị trôi
 ```
 
 `brain/sync/sync.py` **tự chạy verify và từ chối sync nếu còn ERROR**. Vì không sync thì não không có tri thức mới (→ mất recall), kỷ luật trở thành **bắt buộc** mà vẫn không khoá vào hook riêng của agent nào.
@@ -165,6 +165,6 @@ python tools/verify.py --fix    # tự nắn số dòng citation bị trôi
 | Muốn delegate | Ngưỡng số ở [`sub-agents/README.md`](sub-agents/README.md) |
 | Sau khi đổi code | [`changelog/`](changelog/README.md) |
 | Cuối task | Routine [`/knowledge`](brain/KNOWLEDGE.md): distill → prune → verify → sync |
-| Kho tri thức có vẻ hỏng | `python tools/verify.py` |
-| Có bản template mới | [`UPGRADE.md`](UPGRADE.md) → `python tools/update.py` |
+| Kho tri thức có vẻ hỏng | `npm run verify` |
+| Có bản template mới | [`UPGRADE.md`](UPGRADE.md) → `npm run update` |
 | Đặc tả riêng của project | [`ALICE.project.md`](ALICE.project.md) |

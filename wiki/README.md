@@ -23,7 +23,7 @@ Số dòng **chết sau mọi refactor**. Một trang wiki trỏ `src/payments/r
 ```
 
 - **Bắt buộc dùng dạng có `#anchor`** cho mọi citation trỏ vào code trong `wiki/`, `mistakes/`, `decisions/`.
-- `python tools/verify.py` sẽ: tìm anchor trong file → nếu nằm ở dòng khác thì báo **trôi dòng**; `python tools/verify.py --fix` **tự sửa lại số dòng**. Nếu anchor **không còn tồn tại** → báo ERROR (code đã bị đổi tên/xoá → trang wiki đang nói dối).
+- `npm run verify` sẽ: tìm anchor trong file → nếu nằm ở dòng khác thì báo **trôi dòng**; `npm run verify:fix` **tự sửa lại số dòng**. Nếu anchor **không còn tồn tại** → báo ERROR (code đã bị đổi tên/xoá → trang wiki đang nói dối).
 - Trỏ vào file không phải code (config, md) thì dùng `path` trần, không cần dòng.
 
 ## Convention thêm module

@@ -41,7 +41,7 @@ Hai entry `ACTIVE` mâu thuẫn nhau → **cái có ngày mới hơn thắng**, 
 
 ## Kỷ luật citation (bắt buộc)
 - Mỗi tri thức dùng để quyết định phải gắn `chunk_id`/`document_id`.
-- **Luôn map ngược ra `path:line#anchor` thật và MỞ file đó ra xem** trước khi tin — não chỉ là index, file mới là chân lý. Trang wiki có thể đã cũ hơn code; `python tools/verify.py` bắt được citation trỏ sai, nhưng **không** bắt được nội dung mô tả đã lỗi thời.
+- **Luôn map ngược ra `path:line#anchor` thật và MỞ file đó ra xem** trước khi tin — não chỉ là index, file mới là chân lý. Trang wiki có thể đã cũ hơn code; `npm run verify` bắt được citation trỏ sai, nhưng **không** bắt được nội dung mô tả đã lỗi thời.
 
 ## Proof-of-load (forcing function cho tiêu chí A)
 

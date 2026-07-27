@@ -13,8 +13,8 @@ MCP (Model Context Protocol) cho agent thêm "giác quan/tay chân": duyệt web
 MCP quan trọng nhất là **Knowledge MCP của [brain](../brain/README.md)** (SAG) — nơi Alice query ký ức để "không sót". 8 tool read-only: `list_sources` · `list_documents` · `outline` · `search` · `grep` · `get_chunk` · `read` · `get_entity`. Hai cách mount:
 
 - **stdio bridge (KHUYÊN — chạy mọi nơi, không cần network, kể cả Windows↔WSL bị firewall):** agent chạy MCP server trong container qua stdio:
-  - Docker CE trong WSL + agent Windows: `command="wsl"`, `args=["-e","docker","exec","-i","alice-brain-api-1","python","-m","sag_api.mcp.server"]`.
-  - Docker Desktop / Linux / agent trong WSL: `command="docker"`, `args=["exec","-i","alice-brain-api-1","python","-m","sag_api.mcp.server"]`.
+  - Docker CE trong WSL + agent Windows: `command="wsl"`, `args=["-e","docker","exec","-i","<BRAIN_ID>-api-1","python","-m","sag_api.mcp.server"]`.
+  - Docker Desktop / Linux / agent trong WSL: `command="docker"`, `args=["exec","-i","<BRAIN_ID>-api-1","python","-m","sag_api.mcp.server"]`.
 - **HTTP (chỉ khi với tới được):** URL `http://<host>:8000/mcp/` (+ `?source_id=`), header `Authorization: Bearer <TOKEN>`.
 
 Dựng + chi tiết: [`../brain/SETUP.md`](../brain/SETUP.md); giao thức query: [`../brain/RETRIEVAL.md`](../brain/RETRIEVAL.md).
@@ -54,3 +54,6 @@ Dựng + chi tiết: [`../brain/SETUP.md`](../brain/SETUP.md); giao thức query
 | Dịch vụ hạ tầng dự án | MCP của nền tảng (nếu có) |
 
 > Khi init: liệt kê MCP **đang bật** của từng agent, đối chiếu nhu cầu project, rồi đề xuất thêm cái còn thiếu + hướng dẫn + test.
+
+> `<BRAIN_ID>` là danh tính brain của **project này** — mỗi project một brain, nên tên khác nhau.
+> Đừng gõ tay: lấy nguyên khối cấu hình bằng `npm run mcp`, và lấy cổng bằng `npm run brain:status`.

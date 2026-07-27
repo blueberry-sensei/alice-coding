@@ -30,10 +30,10 @@ Sync khi kho tri thức đang hỏng còn tệ hơn không sync: nó nhồi tran
 
 ## Chạy
 ```bash
-python brain/sync/sync.py                 # đồng bộ incremental (chỉ file đổi)
-python brain/sync/sync.py --rebuild       # xoá sạch source + ingest lại toàn bộ
-python brain/sync/sync.py --no-verify     # bỏ gate — chỉ khi gỡ lỗi
-python brain/sync/sync.py --config path/brain.config
+npm run sync                 # đồng bộ incremental (chỉ file đổi)
+npm run sync:rebuild       # xoá sạch source + ingest lại toàn bộ
+npm run sync -- --no-verify     # bỏ gate — chỉ khi gỡ lỗi
+npm run sync -- --config path/brain.config
 ```
 Máy không có Python → chạy trong container: `docker compose exec api python /work/brain/sync/sync.py`.
 

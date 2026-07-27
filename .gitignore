@@ -16,12 +16,18 @@ node_modules/
 package-lock.json
 
 # --- Runtime của brain: CHỨA SECRET hoặc dữ liệu sinh ra, không commit ---
-# brain.config giữ token/JWT của brain. .sag-data là DB (SQLite + LanceDB).
+# brain.config giữ token/JWT của brain.
+# SAG_SECRET_KEY KHÔNG còn nằm ở đây: file .env của brain đã chuyển ra thư mục state của
+# người dùng (Windows %LOCALAPPDATA%\alice-brain\<BRAIN_ID>\, còn lại ~/.local/state/…),
+# và DB nằm trong named volume của Docker. Hai dòng dưới chỉ để dọn tàn dư bản cũ.
 brain/brain.config
 brain/.sync-state.json
 brain/stack/.env
+brain/stack/.env.moved
+# Log cục bộ của sync/launcher (có thể chứa đường dẫn máy, tên file tri thức).
+brain/.logs/
 .sag-data/
-# Source do launcher tự clone (ghim ref) — KHÔNG commit vào repo này.
+# Tàn dư bản cũ: launcher trước đây tự clone source vào đây. Nay chỉ kéo image.
 brain/stack/alice-brain/
 brain/stack/alice-core/
 brain/stack/sag/

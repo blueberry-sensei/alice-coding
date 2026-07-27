@@ -43,7 +43,7 @@ Mỗi entry một khối theo [`_TEMPLATE.md`](_TEMPLATE.md), **mới nhất tr�
 1. Thêm entry mới `D-0009` ghi luật mới.
 2. Sửa entry cũ `D-0004`: `Trạng thái: SUPERSEDED → D-0009`.
 
-Nhờ vậy lịch sử vì-sao vẫn còn, mà retrieval không bị nhiễu — [`brain/RETRIEVAL.md`](../brain/RETRIEVAL.md) bắt buộc **bỏ qua entry SUPERSEDED/RETIRED khi lấy làm căn cứ quyết định**. `python tools/verify.py` sẽ báo lỗi nếu ID đích không tồn tại.
+Nhờ vậy lịch sử vì-sao vẫn còn, mà retrieval không bị nhiễu — [`brain/RETRIEVAL.md`](../brain/RETRIEVAL.md) bắt buộc **bỏ qua entry SUPERSEDED/RETIRED khi lấy làm căn cứ quyết định**. `npm run verify` sẽ báo lỗi nếu ID đích không tồn tại.
 
 ## Ưu tiên khi xung đột
 

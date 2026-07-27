@@ -33,17 +33,17 @@ Rà và xử lý:
 - **Wiki nói sai về code:** `verify` báo anchor mất → sửa nội dung trang, không chỉ sửa số dòng.
 - **Trang wiki phình:** module ôm quá nhiều việc → tách trang, cập nhật `ROUTER.md`.
 
-`python tools/verify.py` in cảnh báo `C7` khi vượt ngưỡng đọc-hết-được — coi cảnh báo đó là **lệnh prune**, không phải thông tin tham khảo.
+`npm run verify` in cảnh báo `C7` khi vượt ngưỡng đọc-hết-được — coi cảnh báo đó là **lệnh prune**, không phải thông tin tham khảo.
 
 ### 4. Verify
 ```bash
-python tools/verify.py --fix     # --fix tự nắn lại citation trôi dòng
+npm run verify:fix     # --fix tự nắn lại citation trôi dòng
 ```
 Phải **0 ERROR**. Đây cũng là gate của bước 5.
 
 ### 5. Sync não
 ```bash
-python brain/sync/sync.py
+npm run sync
 ```
 `sync.py` **tự chạy verify trước và từ chối chạy nếu còn ERROR** — nên bước 4 và 5 thực chất là một cổng duy nhất. Không có não (brain disabled) thì bỏ bước này, **nhưng vẫn phải chạy verify**.
 

@@ -1,7 +1,7 @@
 # UPGRADE — Nâng cấp template mà không mất tri thức project
 
 ```bash
-python knowledge/tools/update.py
+npm run update
 ```
 
 Một lệnh. Không `git pull`, không conflict, không đụng tới tri thức bạn đã tích luỹ.
@@ -24,25 +24,25 @@ Ranh giới này khai báo trong `tools/manifest.json` (kèm sha256 lúc phát h
 ## Quy trình
 
 ```bash
-python knowledge/tools/update.py --check      # có bản mới không?
-python knowledge/tools/update.py --dry-run    # sẽ đổi những gì?
-python knowledge/tools/update.py              # làm thật
-python knowledge/tools/verify.py              # bắt buộc: kiểm lại kho tri thức
+npm run update:check   # có bản mới không?
+npm run update:dry     # sẽ đổi những gì?
+npm run update         # làm thật
+npm run verify         # bắt buộc: kiểm lại kho tri thức
 ```
 
-Ghim một version cụ thể: `--ref v2.1.0`. Dùng fork riêng: đặt biến môi trường `ALICE_TEMPLATE_REPO`.
+Ghim một version cụ thể: `npm run update -- --ref v2.1.0`. Dùng fork riêng: đặt biến môi trường `ALICE_TEMPLATE_REPO`.
 
 ## Sau khi update
 
 1. Đọc phần **MIGRATION phải làm tay** mà `update` in ra (nếu có) → đối chiếu [`MIGRATIONS.md`](MIGRATIONS.md).
 2. Xử lý file `.new` nếu có xung đột: so sánh, gộp, rồi xoá `.new`.
-3. Chạy `python tools/verify.py` — nếu template siết thêm quy ước mới, đây là chỗ nó báo.
+3. Chạy `npm run verify` — nếu template siết thêm quy ước mới, đây là chỗ nó báo.
 4. Nếu có ERROR về format trụ cột (vd template thêm trường bắt buộc) → sửa rồi mới `sync`. Bản thân `sync.py` cũng chặn nếu còn ERROR.
-5. Chạy `python brain/sync/sync.py` để não khớp lại file.
+5. Chạy `npm run sync` để não khớp lại file.
 
 ## Rollback
 
-Tri thức project không bị `update` đụng nên rollback chỉ là chuyện của template: `git checkout` lại thư mục `knowledge/` trong repo project của bạn (đây là lý do nên commit `knowledge/`), hoặc `python tools/update.py --ref <version-cũ>`.
+Tri thức project không bị `update` đụng nên rollback chỉ là chuyện của template: `git checkout` lại thư mục `knowledge/` trong repo project của bạn (đây là lý do nên commit `knowledge/`), hoặc `npm run update -- --ref <version-cũ>`.
 
 ## Dành cho người bảo trì template
 
@@ -51,8 +51,8 @@ Trước khi phát hành:
 ```bash
 # 1. sửa VERSION theo semver
 # 2. ghi mục mới vào MIGRATIONS.md nếu có breaking change
-python tools/update.py --gen-manifest        # 3. sinh lại manifest
-python tools/verify.py                        # 4. template phải sạch
+npm run manifest       # 3. sinh lại manifest
+npm run verify         # 4. template phải sạch
 ```
 
 `--gen-manifest` quét theo `TEMPLATE_GLOBS` trong [`tools/update.py`](tools/update.py). **Thêm file template mới thì phải thêm glob**, nếu không `update` sẽ không phát nó tới người dùng.

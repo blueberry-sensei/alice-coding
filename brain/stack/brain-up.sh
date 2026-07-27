@@ -1,122 +1,106 @@
 #!/usr/bin/env bash
 # ALICE CODING — dựng brain stack bằng MỘT LỆNH (mac / Linux / WSL).
-# Tự động: tạo .env, sinh SAG_SECRET_KEY, LẤY hai repo nguồn, chọn BIND_ADDRESS theo
-# môi trường, build + chạy + pull model embedding. KHÔNG cần sửa .env tay.
 #
-# Nguồn build (cả hai đều tự lấy, KHÔNG cần chuẩn bị gì):
-#   alice-brain -> fork ứng dụng (apps/api + apps/web)
-#   alice-core  -> engine ALICE CORE (src/alicecore)
-# Đang phát triển chính hai repo đó? Đặt ALICE_APP_PATH / ALICE_CORE_PATH trong
-# .env để build từ bản trên máy thay vì bản trên GitHub.
+# Mặc định: KÉO IMAGE dựng sẵn về chạy. Không cần git, không cần source, không build gì.
+# Tự động: tính BRAIN_ID riêng cho project, cấp cổng trống, sinh SAG_SECRET_KEY (ngoài repo),
+# pull image + chạy NỀN + pull model embedding.
+#
+# MỖI PROJECT MỘT BRAIN: tên compose project suy từ đường dẫn kho tri thức, nên chạy song song
+# nhiều project không đụng container, không đụng cổng, không chung dữ liệu.
+#
+# CHẾ ĐỘ DEV (chỉ dành cho người phát triển chính alice-brain / alice-core): đặt CẢ HAI
+# ALICE_APP_PATH và ALICE_CORE_PATH trong file .env của brain (đường dẫn in ra ở cuối lệnh)
+# → launcher build từ source trên máy thay vì dùng image đã publish.
 set -euo pipefail
 
 STACK="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$STACK"
 
-[ -f .env ] || cp .env.example .env
-set -a; . ./.env; set +a
-
-APP_REPO="${ALICE_APP_REPO:-https://github.com/blueberry-sensei/alice-brain.git}"
-CORE_REPO="${ALICE_CORE_REPO:-https://github.com/blueberry-sensei/alice-core.git}"
-APP_REF="${ALICE_APP_REF:-main}"
-CORE_REF="${ALICE_CORE_REF:-main}"
-
-# SAG_SECRET_KEY (sinh nếu thiếu)
-if [ -z "${SAG_SECRET_KEY:-}" ]; then
-  SAG_SECRET_KEY="$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
-  sed -i.bak "s|^SAG_SECRET_KEY=.*|SAG_SECRET_KEY=${SAG_SECRET_KEY}|" .env && rm -f .env.bak
-  echo "Đã sinh SAG_SECRET_KEY."
+# Ghi toàn bộ output ra file: dựng stack lỗi ở bước nào (Docker, pull, build) thì còn cái mà
+# đọc sau khi terminal đã đóng. Không có `tee` thì chạy tiếp, chỉ mất log.
+LOG_DIR="$(cd "$STACK/.." && pwd)/.logs"
+LOG_FILE="$LOG_DIR/brain-up.log"
+if command -v tee >/dev/null 2>&1 && mkdir -p "$LOG_DIR" 2>/dev/null; then
+  exec > >(tee -a "$LOG_FILE") 2>&1
+else
+  echo "[log] Không ghi được log ra file; chỉ còn console."
+  LOG_FILE=""
 fi
 
-abspath() {
-  local p="${1:-$2}"
-  case "$p" in /*|?:*) : ;; *) p="$STACK/$p" ;; esac
-  [ "${3:-}" = "create" ] && mkdir -p "$p"
-  ( cd "$p" 2>/dev/null && pwd ) || echo "$p"
-}
+command -v node >/dev/null 2>&1 || { echo "!! Cần Node 18+ (brain-env.js tính danh tính brain)."; exit 1; }
 
-# Trỏ tới bản trên máy nếu .env khai báo; nếu không thì clone (ghim ref) vào ./<dir>.
-# $1=tên biến  $2=repo  $3=ref  $4=thư mục đích  $5=file/thư mục bắt buộc phải có  $6=mô tả
-resolve_source() {
-  local key="$1" repo="$2" ref="$3" dir="$4" must="$5" what="$6" raw abs
-  eval "raw=\${$key:-}"
-  if [ -n "$raw" ]; then
-    abs="$(abspath "$raw" "$raw")"
-    [ -e "$abs/$must" ] || {
-      echo "!! $key sai: $abs"
-      echo "   Thư mục này phải chứa '$must' ($what)."
+# Danh tính + cổng + secret: tính ở MỘT chỗ (brain-env.js) để launcher, cli.js và compose
+# không bao giờ lệch nhau. File .env của brain nằm NGOÀI repo — xem BRAIN_ENV_FILE.
+eval "$(node "$STACK/brain-env.js" --shell)"
+
+COMPOSE_FILES=(-f "$STACK/compose.yaml")
+
+if [ "$BRAIN_MODE" = "dev" ]; then
+  # Kiểm tra thật, không tin lời khai trong .env: sai đường dẫn mà vẫn chạy tiếp thì lỗi
+  # hiện ra ở giữa lúc build với thông báo khó hiểu.
+  for pair in "ALICE_APP_PATH:apps/api" "ALICE_CORE_PATH:pyproject.toml"; do
+    key="${pair%%:*}"; must="${pair##*:}"
+    eval "dir=\$$key"
+    [ -e "$dir/$must" ] || {
+      echo "!! $key sai: $dir"
+      echo "   Thư mục này phải chứa '$must'. Sửa trong: $BRAIN_ENV_FILE"
       exit 1
     }
-  else
-    abs="$STACK/$dir"
-    if [ ! -e "$abs/$must" ]; then
-      echo "Lấy $dir ($ref)..."
-      rm -rf "$abs"
-      git clone --depth 1 --branch "$ref" "$repo" "$abs" \
-        || { echo "!! Không clone được $repo (kiểm mạng / git)."; exit 1; }
-    elif [ -d "$abs/.git" ]; then
-      # Thư mục do launcher tự clone → LÀM MỚI. Không có bước này thì mọi lần chạy
-      # sau đều build từ source cũ và bản cập nhật không bao giờ tới được người dùng.
-      # `reset --hard` an toàn ở đây vì đây là bản sao chỉ-đọc do launcher quản lý;
-      # ai muốn sửa source thì dùng ALICE_APP_PATH / ALICE_CORE_PATH (nhánh trên).
-      echo "Cập nhật $dir ($ref)..."
-      if git -C "$abs" fetch --depth 1 origin "$ref" >/dev/null 2>&1; then
-        git -C "$abs" reset --hard FETCH_HEAD >/dev/null 2>&1 \
-          || echo "!! Không đặt lại được $dir về $ref — dùng bản đang có."
-      else
-        echo "!! Không fetch được $dir (kiểm mạng) — dùng bản đang có."
-      fi
-    fi
-    [ -e "$abs/$must" ] || {
-      echo "!! $dir tải về nhưng thiếu '$must' — repo nguồn có thể đã đổi cấu trúc."
-      exit 1
-    }
-  fi
-  eval "export $key=\"$abs\""
-}
-
-command -v git >/dev/null 2>&1 || { echo "!! Cần git để lấy source."; exit 1; }
-resolve_source ALICE_APP_PATH  "$APP_REPO"  "$APP_REF"  "alice-brain" "apps/api"       "fork ứng dụng ALICE"
-resolve_source ALICE_CORE_PATH "$CORE_REPO" "$CORE_REF" "alice-core"  "pyproject.toml" "engine ALICE CORE"
-
-export BRAIN_DATA="$(abspath "${BRAIN_DATA:-}" "../.sag-data" create)"
-export SAG_SECRET_KEY
-
-# BIND_ADDRESS: WSL cần 0.0.0.0 để mở từ Windows; nơi khác 127.0.0.1 (trừ khi .env ép sẵn)
-if [ -z "${BIND_ADDRESS:-}" ]; then
-  if grep -qiE "microsoft|wsl" /proc/version 2>/dev/null; then
-    BIND_ADDRESS=0.0.0.0; echo "Phát hiện WSL → BIND_ADDRESS=0.0.0.0"
-  else
-    BIND_ADDRESS=127.0.0.1
-  fi
+  done
+  COMPOSE_FILES+=(-f "$STACK/compose.dev.yaml")
+  echo "Chế độ DEV: build từ source trên máy."
+  echo "  ALICE_APP_PATH  = $ALICE_APP_PATH"
+  echo "  ALICE_CORE_PATH = $ALICE_CORE_PATH"
+  export DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1   # additional_contexts cần BuildKit
 fi
-export BIND_ADDRESS
 
-echo "ALICE_APP_PATH  = $ALICE_APP_PATH"
-echo "ALICE_CORE_PATH = $ALICE_CORE_PATH"
-echo "BRAIN_DATA      = $BRAIN_DATA"
-echo "BIND_ADDRESS    = $BIND_ADDRESS"
-export DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1   # additional_contexts cần BuildKit
-docker compose --env-file .env up -d --build
+# BIND_ADDRESS mặc định 127.0.0.1, kể cả trên WSL (WSL2 chuyển tiếp localhost sẵn nên Windows
+# vẫn mở được). Bản cũ tự bật 0.0.0.0 khi thấy WSL — đó là lỗ thật: brain nói HTTP TRẦN, mở ra
+# ngoài nghĩa là API key gõ trên UI đi qua LAN ở dạng đọc được.
+if [ "${BIND_ADDRESS:-127.0.0.1}" != "127.0.0.1" ]; then
+  echo "!! CẢNH BÁO: BIND_ADDRESS=$BIND_ADDRESS → brain mở ra ngoài máy qua HTTP KHÔNG mã hoá."
+  echo "   API key nhập trên UI sẽ đi qua mạng ở dạng đọc được. Chỉ dùng trên mạng tin cậy."
+fi
+
+echo "BRAIN_ID     = $BRAIN_ID"
+echo "Chế độ       = $BRAIN_MODE"
+echo "BIND_ADDRESS = $BIND_ADDRESS"
+echo "Cổng         = web $WEB_PORT · api $API_PORT · checklist $CHECKLIST_PORT"
+
+dc() { docker compose -p "$BRAIN_ID" "${COMPOSE_FILES[@]}" --env-file "$BRAIN_ENV_FILE" "$@"; }
+
+if [ "$BRAIN_MODE" = "dev" ]; then
+  dc up -d --build
+else
+  echo "Kéo image ALICE (lần đầu vài phút)..."
+  dc pull || {
+    echo "!! Không kéo được image. Kiểm mạng, hoặc image chưa được publish."
+    echo "   Có source trên máy? Đặt ALICE_APP_PATH + ALICE_CORE_PATH trong $BRAIN_ENV_FILE"
+    echo "   để build từ đó thay vì kéo image."
+    exit 1
+  }
+  dc up -d
+fi
 
 echo "Kéo model embedding bge-m3 (lần đầu vài phút)..."
-docker compose exec -T embedding ollama pull bge-m3 \
-  || echo "!! Pull model lỗi. Chạy tay: docker compose exec embedding ollama pull bge-m3"
+dc exec -T embedding ollama pull bge-m3 \
+  || echo "!! Pull model lỗi. Chạy tay: npm run brain:pull"
 
 echo ""
-echo "==> Checklist: http://localhost:${CHECKLIST_PORT:-8090}"
-echo "==> ALICE app: http://localhost:${WEB_PORT:-3000}"
+echo "==> Checklist: http://localhost:${CHECKLIST_PORT}"
+echo "==> ALICE app: http://localhost:${WEB_PORT}"
+[ -n "$LOG_FILE" ] && echo "==> Log dựng stack: $LOG_FILE"
+echo "==> Log API + engine: $BRAIN_LOGS/sag-api.log"
+echo "==> Cấu hình brain (NGOÀI repo, có secret — đừng commit): $BRAIN_ENV_FILE"
 
-# WSL: VM tự tắt NGAY khi phiên launcher kết thúc → brain tắt theo. Vì vậy trên WSL,
-# launcher GIỮ phiên sống bằng cách theo dõi log (chặn) → VM sống → localhost dùng được.
-# (mac/Linux/Docker Desktop: bỏ qua, launcher thoát bình thường vì daemon tự sống.)
+# WSL: VM tự tắt khi phiên launcher cuối cùng kết thúc → brain tắt theo. Bản cũ giữ VM sống
+# bằng cách CHẶN terminal ở `logs -f`, nên đóng cửa sổ là mất brain và không làm được việc khác.
+# Nay để lại một tiến trình nền trong distro: VM sống, terminal trả về ngay.
 if grep -qiE "microsoft|wsl" /proc/version 2>/dev/null; then
-  echo ""
-  echo "════════════════════════════════════════════════════════════════"
-  echo "  ✅ BRAIN ĐANG CHẠY — GIỮ CỬA SỔ NÀY MỞ (nó giữ WSL + brain sống)."
-  echo "  🌐 Mở trên trình duyệt Windows:  http://localhost:${WEB_PORT:-3000}"
-  echo "  ⏹  Ctrl+C = TẮT brain."
-  echo "════════════════════════════════════════════════════════════════"
-  echo ""
-  exec docker compose --env-file .env logs -f 2>/dev/null || exec sleep infinity
+  if ! pgrep -f "alice-brain-keepalive" >/dev/null 2>&1; then
+    setsid nohup bash -c 'exec -a alice-brain-keepalive sleep infinity' >/dev/null 2>&1 < /dev/null &
+    disown 2>/dev/null || true
+  fi
+  echo "==> WSL: đã để tiến trình nền giữ distro sống. Đóng terminal này vẫn OK."
+  echo "    Tắt hẳn: npm run brain:down"
 fi

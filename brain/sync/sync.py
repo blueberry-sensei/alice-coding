@@ -31,6 +31,62 @@ HERE = Path(__file__).resolve().parent          # .../knowledge/brain/sync
 BRAIN_DIR = HERE.parent                          # .../knowledge/brain
 KNOWLEDGE_DIR = BRAIN_DIR.parent                 # .../knowledge
 
+# ── Log ra file ────────────────────────────────────────────────────────────
+# Sync chạy một lần rồi tắt, nên output trên terminal biến mất theo cửa sổ. Ghi kèm ra file
+# để khi ingest lỗi còn cái mà đọc. Tee cả stdout/stderr: không phải sửa từng print, và
+# traceback (đi qua stderr) cũng vào log.
+LOG_DIR = BRAIN_DIR / ".logs"
+LOG_FILE = LOG_DIR / "sync.log"
+LOG_MAX_BYTES = 5 * 1024 * 1024
+
+
+class _Tee:
+    """Ghi song song ra console và file, mỗi dòng trong file có mốc thời gian."""
+
+    def __init__(self, stream, handle, tag):
+        self._stream = stream
+        self._handle = handle
+        self._tag = tag
+        self._at_line_start = True
+
+    def write(self, text):
+        self._stream.write(text)
+        try:
+            for piece in text.splitlines(keepends=True):
+                if self._at_line_start and piece.strip():
+                    stamp = __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    self._handle.write("%s  %s  " % (stamp, self._tag))
+                self._handle.write(piece)
+                self._at_line_start = piece.endswith("\n")
+            self._handle.flush()
+        except Exception:
+            pass  # mất log còn hơn làm sync chết
+        return len(text)
+
+    def flush(self):
+        self._stream.flush()
+        try:
+            self._handle.flush()
+        except Exception:
+            pass
+
+    def isatty(self):
+        return getattr(self._stream, "isatty", lambda: False)()
+
+
+def _install_file_log():
+    """Bật tee. Lỗi mở file thì bỏ qua — log là phụ, sync vẫn phải chạy."""
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        if LOG_FILE.exists() and LOG_FILE.stat().st_size > LOG_MAX_BYTES:
+            LOG_FILE.replace(LOG_FILE.with_suffix(".log.1"))
+        handle = LOG_FILE.open("a", encoding="utf-8")
+    except OSError as error:
+        print("[brain-sync] không ghi được log ra file (%s); chỉ còn console" % error)
+        return
+    sys.stdout = _Tee(sys.stdout, handle, "OUT")
+    sys.stderr = _Tee(sys.stderr, handle, "ERR")
+
 # Bump khi đổi cấu trúc .sync-state.json. State cũ hơn -> buộc --rebuild thay vì
 # diễn giải sai map file->document rồi tạo document trùng.
 STATE_SCHEMA = 2
@@ -248,4 +304,15 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    _install_file_log()
+    try:
+        main()
+    except SystemExit:
+        raise
+    except BaseException:
+        # Traceback phải nằm trong file log, không chỉ trên terminal đã đóng.
+        import traceback
+
+        traceback.print_exc()
+        print("[brain-sync] THẤT BẠI — chi tiết ở %s" % LOG_FILE)
+        raise

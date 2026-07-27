@@ -22,4 +22,4 @@ Copy khối dưới, dán lên **đầu** `LOG.md`. ID lấy số kế tiếp, *
 - **Luật** viết ở thể mệnh lệnh để turn sau đọc là thi hành được ngay — không viết kiểu tường thuật ("Bệ hạ có vẻ thích...").
 - **Nguồn** bắt buộc có trích dẫn. Không trích được = đang bịa → đừng ghi.
 
-`python tools/verify.py` kiểm: ID duy nhất & đúng định dạng, đủ 6 trường, trạng thái hợp lệ, đích `SUPERSEDED` tồn tại.
+`npm run verify` kiểm: ID duy nhất & đúng định dạng, đủ 6 trường, trạng thái hợp lệ, đích `SUPERSEDED` tồn tại.

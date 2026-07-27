@@ -26,7 +26,7 @@ const C = {
   y: (s) => `\x1b[33m${s}\x1b[0m`,
   r: (s) => `\x1b[31m${s}\x1b[0m`,
 };
-const OK = C.g("  OK  "), WARN = C.y(" CHÚ Ý"), ERR = C.r(" LỖI ");
+const OK = C.g("  OK  "), WARN = C.y(" NOTE "), ERR = C.r(" FAIL ");
 
 function tryRun(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, { encoding: "utf8", shell: false, ...opts });
@@ -87,7 +87,7 @@ function composeEnv() {
   };
   return {
     ...process.env,
-    // Mặc định trỏ tới thư mục launcher tự clone; .env có thể ép sang bản trên máy.
+    // Chỉ có tác dụng ở chế độ dev; chế độ image thì compose.yaml không dùng tới.
     ALICE_APP_PATH: abs(map.ALICE_APP_PATH, "alice-brain"),
     ALICE_CORE_PATH: abs(map.ALICE_CORE_PATH, "alice-core"),
     BRAIN_LOGS: path.join(ROOT, "brain", ".logs", "api"),
@@ -96,8 +96,6 @@ function composeEnv() {
     WEB_PORT: info.WEB_PORT,
     API_PORT: info.API_PORT,
     CHECKLIST_PORT: info.CHECKLIST_PORT,
-    ALICE_APP_PATH: abs(map.ALICE_APP_PATH, "alice-brain"),
-    ALICE_CORE_PATH: abs(map.ALICE_CORE_PATH, "alice-core"),
     // compose.dev.yaml nội suy ${BRAIN_ID} vào tag image. Thiếu biến này thì `down`/`uninstall`
     // ở chế độ dev nhìn ra tag rỗng và KHÔNG xoá được image vừa build.
     BRAIN_ID: info.BRAIN_ID,
@@ -110,12 +108,12 @@ function composeEnv() {
 function compose(args) {
   const env = composeEnv();
   if (!env) {
-    console.error(C.r("Brain của project này chưa từng được dựng."));
-    console.error("Chạy trước: " + C.b("npm run brain"));
+    console.error(C.r("This project's brain has never been built."));
+    console.error("Run this first: " + C.b("npm run brain"));
     return 1;
   }
   const d = findDocker();
-  if (!d) { console.error(C.r("Không tìm thấy Docker.") + " Chạy `npm run doctor`."); return 1; }
+  if (!d) { console.error(C.r("Docker not found.") + " Run `npm run doctor`."); return 1; }
   // `-p <BRAIN_ID>` là thứ tách brain của project này khỏi brain của project khác:
   // container, network và named volume đều mang tiền tố đó.
   // Bộ `-f` phải khớp với lúc `up`, nếu không compose nhìn ra một stack khác và
@@ -144,13 +142,13 @@ function uninstallTargets() {
   return [
     // Dữ liệu não nay nằm trong NAMED VOLUME của Docker (`down --volumes` ở trên xoá nó).
     // Thư mục dưới đây chỉ còn là tàn dư của bản trước khi chuyển sang volume.
-    { p: dataDir, what: "dữ liệu não bản cũ (bind-mount, nếu còn sót)" },
-    { p: path.join(STACK, "alice-brain"), what: "source ứng dụng do launcher clone" },
-    { p: path.join(STACK, "alice-core"), what: "source engine do launcher clone" },
-    { p: path.join(STACK, ".env"), what: "cấu hình stack bản cũ (nếu còn sót)" },
-    { p: path.join(STACK, ".env.moved"), what: "ghi chú vị trí .env mới" },
-    { p: path.join(ROOT, "brain", "brain.config"), what: "cấu hình sync (chứa token)" },
-    { p: path.join(ROOT, "brain", ".sync-state.json"), what: "map file→document của sync" },
+    { p: dataDir, what: "legacy brain data (bind-mount, if any is left)" },
+    { p: path.join(STACK, "alice-brain"), what: "application source cloned by the launcher" },
+    { p: path.join(STACK, "alice-core"), what: "engine source cloned by the launcher" },
+    { p: path.join(STACK, ".env"), what: "legacy stack config (if any is left)" },
+    { p: path.join(STACK, ".env.moved"), what: "pointer to the new .env location" },
+    { p: path.join(ROOT, "brain", "brain.config"), what: "sync config (holds a token)" },
+    { p: path.join(ROOT, "brain", ".sync-state.json"), what: "sync file-to-document map" },
   ];
 }
 
@@ -165,36 +163,36 @@ function uninstall(argv) {
   const brain = brainEnv.peek();
   const keepCache = argv.includes("--keep-cache");
 
-  console.log(C.b("Sẽ gỡ:"));
-  console.log("  • container + network + volume + image của brain " + C.b(brain.BRAIN_ID));
-  console.log("  • image mồ côi (dangling) do các lần build brain để lại");
+  console.log(C.b("Will remove:"));
+  console.log("  - containers, network, volumes and images of brain " + C.b(brain.BRAIN_ID));
+  console.log("  - dangling images left behind by earlier brain builds");
   console.log(keepCache
-    ? C.d("  • build cache: GIỮ (đang bật --keep-cache)")
-    : "  • build cache của Docker " + C.y("— dùng chung CẢ MÁY, xem ghi chú bên dưới"));
-  if (!targets.length) console.log(C.d("  • (không còn file runtime nào trên đĩa)"));
+    ? C.d("  - build cache: KEPT (--keep-cache is set)")
+    : "  - Docker build cache " + C.y("- shared MACHINE-WIDE, see the note below"));
+  if (!targets.length) console.log(C.d("  - (no runtime files left on disk)"));
   for (const t of targets) {
     const outside = !insideRoot(t.p);
-    console.log(`  • ${outside ? t.p : path.relative(ROOT, t.p)}  ${C.d("— " + t.what)}`
-      + (outside ? C.y("  [NGOÀI thư mục project — sẽ BỎ QUA]") : ""));
+    console.log(`  - ${outside ? t.p : path.relative(ROOT, t.p)}  ${C.d("- " + t.what)}`
+      + (outside ? C.y("  [OUTSIDE the project directory - WILL BE SKIPPED]") : ""));
   }
-  console.log(C.g("\nGiữ nguyên: ") + "wiki/ · mistakes/ · decisions/ · context/ · changelog/ · ALICE.project.md");
+  console.log(C.g("\nKept: ") + "wiki/ | mistakes/ | decisions/ | context/ | changelog/ | ALICE.project.md");
 
   if (!keepCache) {
-    console.log(C.d("\nBuild cache không gắn nhãn theo project nên Docker không lọc được phần"));
-    console.log(C.d("riêng của brain — dọn là dọn cả máy. Không mất dữ liệu, chỉ khiến lần build"));
-    console.log(C.d("kế tiếp của MỌI project chậm hơn. Giữ lại: npm run uninstall -- --yes --keep-cache"));
+    console.log(C.d("\nDocker does not label build cache per project, so it cannot filter out just this"));
+    console.log(C.d("brain's share - clearing it clears the whole machine. No data is lost; it only makes"));
+    console.log(C.d("the next build of EVERY project slower. Keep it: npm run uninstall -- --yes --keep-cache"));
   }
 
   if (!yes) {
-    console.log(C.y("\nĐây là thao tác KHÔNG hoàn tác được (dữ liệu não phải ingest lại từ đầu)."));
-    console.log("Chắc chắn thì chạy: " + C.b("npm run uninstall -- --yes"));
+    console.log(C.y("\nThis CANNOT be undone (brain data has to be ingested again from scratch)."));
+    console.log("If you are sure, run: " + C.b("npm run uninstall -- --yes"));
     return 2;
   }
 
   let failed = false;
   const d = findDocker();
   if (!d) {
-    console.log(C.y("Không thấy Docker — bỏ qua phần container, chỉ dọn file."));
+    console.log(C.y("Docker not found - skipping containers, cleaning files only."));
   } else {
     const env = composeEnv();
     const viaCompose = env && run(d.cmd,
@@ -221,7 +219,7 @@ function uninstall(argv) {
         && (name.includes(brain.BRAIN_ID)
           || name.startsWith("alice-brain-api:") || name.startsWith("alice-brain-web:")));
     if (images.length) {
-      console.log(C.d(`Xoá ${images.length} image của brain này...`));
+      console.log(C.d(`Removing ${images.length} image(s) of this brain...`));
       run(d.cmd, [...d.pre, "rmi", "-f", ...images]);
     }
 
@@ -232,7 +230,7 @@ function uninstall(argv) {
     // vẫn đầy". Docker không lọc cache theo project được nên đây là thao tác toàn máy — đã
     // cảnh báo ở trên, `--keep-cache` để từ chối.
     if (!keepCache) {
-      console.log(C.d("Dọn build cache của Docker..."));
+      console.log(C.d("Clearing the Docker build cache..."));
       run(d.cmd, [...d.pre, "builder", "prune", "-af"]);
     }
   }
@@ -240,20 +238,20 @@ function uninstall(argv) {
   for (const t of targets) {
     // An toàn: không bao giờ xoá thứ nằm ngoài thư mục project.
     if (!insideRoot(t.p)) {
-      console.log(C.y(`Bỏ qua ${t.p} (ngoài project) — xoá tay nếu muốn.`));
+      console.log(C.y(`Skipping ${t.p} (outside the project) - delete it by hand if you want.`));
       continue;
     }
     try { fs.rmSync(t.p, { recursive: true, force: true, maxRetries: 3 }); }
     catch (err) {
       failed = true;
-      console.error(C.r(`Không xoá được ${path.relative(ROOT, t.p)}: ${err.message}`));
-      console.error(C.d("  (Docker Desktop còn giữ file? Thử `npm run brain:down` rồi chạy lại.)"));
+      console.error(C.r(`Could not delete ${path.relative(ROOT, t.p)}: ${err.message}`));
+      console.error(C.d("  (Docker Desktop still holding the files? Try `npm run brain:down`, then retry.)"));
     }
   }
 
-  console.log(failed ? C.r("\nGỡ chưa hoàn tất — xem lỗi phía trên.")
-                     : C.g("\nĐã gỡ Docker + runtime. Tri thức còn nguyên."));
-  console.log(C.d("Dựng lại: npm run brain   ·   Xoá luôn tri thức: npm run reset -- --yes"));
+  console.log(failed ? C.r("\nRemoval incomplete - see the errors above.")
+                     : C.g("\nDocker and runtime removed. Your knowledge base is untouched."));
+  console.log(C.d("Rebuild: npm run brain   |   Also wipe knowledge: npm run reset -- --yes"));
   return failed ? 1 : 0;
 }
 
@@ -287,29 +285,29 @@ function reset(argv) {
   const yes = argv.includes("--yes") || argv.includes("-y");
   const files = instanceKnowledge();
 
-  console.log(C.r(C.b("RESET — sẽ XOÁ VĨNH VIỄN tri thức của project:\n")));
-  if (!files.length) console.log(C.d("  (chưa có file tri thức nào — kho đang trắng)"));
-  for (const f of files) console.log("  • " + path.relative(ROOT, f).replace(/\\/g, "/"));
-  console.log(C.d("\nSau đó chạy `tools/update.py --ref main` để kéo template mới nhất và tạo lại khung trắng."));
+  console.log(C.r(C.b("RESET - this PERMANENTLY DELETES the project knowledge base:\n")));
+  if (!files.length) console.log(C.d("  (no knowledge files yet - the base is empty)"));
+  for (const f of files) console.log("  - " + path.relative(ROOT, f).replace(/\\/g, "/"));
+  console.log(C.d("\nThen `tools/update.py --ref main` pulls the newest template and recreates a blank skeleton."));
 
   if (!yes) {
-    console.log(C.y("\nKhông có bản sao lưu nào. Nếu knowledge/ đã commit thì còn cứu được bằng git;"));
-    console.log(C.y("nếu chưa, tri thức mất là mất hẳn."));
-    console.log("Chắc chắn thì chạy: " + C.b("npm run reset -- --yes"));
+    console.log(C.y("\nThere is no backup. If knowledge/ is committed you can still recover it with git;"));
+    console.log(C.y("if it is not, the knowledge is gone for good."));
+    console.log("If you are sure, run: " + C.b("npm run reset -- --yes"));
     return 2;
   }
 
   for (const f of files) {
     try { fs.rmSync(f, { force: true }); }
-    catch (err) { console.error(C.r(`Không xoá được ${path.relative(ROOT, f)}: ${err.message}`)); return 1; }
+    catch (err) { console.error(C.r(`Could not delete ${path.relative(ROOT, f)}: ${err.message}`)); return 1; }
   }
-  console.log(C.d(`Đã xoá ${files.length} file. Đang kéo template mới nhất...`));
+  console.log(C.d(`Deleted ${files.length} file(s). Pulling the newest template...`));
   const rc = python("tools/update.py", ["--ref", "main"]);
   if (rc !== 0) {
-    console.error(C.r("update.py lỗi — kho đang trống. Chạy lại `npm run update` khi có mạng."));
+    console.error(C.r("update.py failed - the base is empty. Run `npm run update` again once you are online."));
     return rc;
   }
-  console.log(C.g("\nĐã reset. Chạy `npm run verify` rồi INITIALIZATION để nạp lại tri thức."));
+  console.log(C.g("\nReset done. Run `npm run verify`, then INITIALIZATION to refill the knowledge base."));
   return 0;
 }
 
@@ -330,9 +328,9 @@ function get(url, ms = 2500) {
 function up() {
   const d = findDocker();
   if (!d) {
-    console.error(C.r("Không tìm thấy Docker đang chạy."));
-    console.error("  • Docker Desktop: mở app, đợi icon xanh, chạy lại.");
-    if (IS_WIN) console.error("  • Docker CE trong WSL: mở terminal WSL, `sudo service docker start`.");
+    console.error(C.r("No running Docker daemon found."));
+    console.error("  - Docker Desktop: open the app, wait for the green icon, then retry.");
+    if (IS_WIN) console.error("  - Docker CE inside WSL: open a WSL terminal, `sudo service docker start`.");
     return 1;
   }
   console.log(C.d(`Docker: ${d.kind} (server ${d.version})`));
@@ -343,7 +341,7 @@ function up() {
   }
   if (IS_WIN && d.kind === "wsl") {
     console.log(C.d("→ brain-up.sh qua WSL (Docker CE trong WSL)"));
-    console.log(C.y("Giữ cửa sổ này MỞ — đóng đi thì WSL tắt, brain tắt theo."));
+    console.log(C.y("Keep this window OPEN - closing it shuts down WSL, and the brain with it."));
     return run("wsl", ["-e", "bash", "brain/stack/brain-up.sh"]);
   }
   console.log(C.d("→ brain-up.sh"));
@@ -353,7 +351,7 @@ function up() {
 function python(scriptRel, args) {
   const py = findPython();
   if (!py) {
-    console.error(C.r("Không tìm thấy Python.") + " Cần Python 3.9+ (https://python.org).");
+    console.error(C.r("Python not found.") + " Python 3.9+ is required (https://python.org).");
     return 1;
   }
   return run(py.cmd, [...py.pre, path.join(ROOT, scriptRel), ...args]);
@@ -362,15 +360,15 @@ function python(scriptRel, args) {
 async function status() {
   const d = findDocker();
   const info = brainEnv.peek();
-  console.log(C.b("Brain của project này:"));
-  console.log(`  ${info.BRAIN_ID}` + (info.exists ? "" : C.y("  [chưa dựng bao giờ]")));
-  console.log(C.d(`  chế độ: ${info.BRAIN_MODE === "dev" ? "dev — build từ source trên máy" : "image dựng sẵn"}`));
+  console.log(C.b("Brain for this project:"));
+  console.log(`  ${info.BRAIN_ID}` + (info.exists ? "" : C.y("  [never built]")));
+  console.log(C.d(`  mode: ${info.BRAIN_MODE === "dev" ? "dev - built from local sources" : "published image"}`));
   console.log(C.b("\nContainer:"));
   if (d) run(d.cmd, [...d.pre, "ps", "--filter",
                      `label=com.docker.compose.project=${info.BRAIN_ID}`,
                      "--format", "  {{.Names}}\t{{.Status}}"]);
-  else console.log(C.r("  Không tìm thấy Docker."));
-  console.log(C.b("\nDịch vụ:"));
+  else console.log(C.r("  Docker not found."));
+  console.log(C.b("\nServices:"));
   const probes = [
     ["API      ", `http://localhost:${info.API_PORT}`, "/api/v1/system/ready"],
     ["Web      ", `http://localhost:${info.WEB_PORT}`, ""],
@@ -379,7 +377,7 @@ async function status() {
   for (const [label, base, probe] of probes) {
     const res = await get(base + probe);
     const up = probe ? res && res.status === 200 : Boolean(res);
-    console.log(`  ${label} ${base}  ${up ? C.g("sẵn sàng") : C.r("chưa lên")}`);
+    console.log(`  ${label} ${base}  ${up ? C.g("ready") : C.r("down")}`);
   }
   return 0;
 }
@@ -388,7 +386,7 @@ async function status() {
 async function list() {
   const brains = brainEnv.listBrains();
   if (!brains.length) {
-    console.log(C.y("Chưa có brain nào trên máy này.") + " Dựng: " + C.b("npm run brain"));
+    console.log(C.y("No brain on this machine yet.") + " Build one: " + C.b("npm run brain"));
     return 0;
   }
   const d = findDocker();
@@ -398,13 +396,13 @@ async function list() {
     for (const name of out.split(/\r?\n/)) if (name.trim()) running.add(name.trim());
   }
   const here = brainEnv.brainId();
-  console.log(C.b("Brain trên máy này:"));
+  console.log(C.b("Brains on this machine:"));
   for (const brain of brains) {
-    const mark = brain.id === here ? C.g(" ← project hiện tại") : "";
-    const state = running.has(brain.id) ? C.g("đang chạy") : C.d("đã tắt  ");
-    console.log(`  ${state}  ${brain.id.padEnd(34)} web ${brain.web} · api ${brain.api} · checklist ${brain.checklist}${mark}`);
+    const mark = brain.id === here ? C.g(" <- current project") : "";
+    const state = running.has(brain.id) ? C.g("running") : C.d("stopped");
+    console.log(`  ${state}  ${brain.id.padEnd(34)} web ${brain.web} | api ${brain.api} | checklist ${brain.checklist}${mark}`);
   }
-  console.log(C.d("\nMỗi brain là một compose project riêng: container, network và volume đều tách."));
+  console.log(C.d("\nEach brain is its own compose project: containers, network and volumes are all separate."));
   return 0;
 }
 
@@ -415,62 +413,62 @@ function mcp() {
   const args = wsl
     ? ["-e", "docker", "exec", "-i", `${brainEnv.brainId()}-api-1`, "python", "-m", "sag_api.mcp.server"]
     : ["exec", "-i", `${brainEnv.brainId()}-api-1`, "python", "-m", "sag_api.mcp.server"];
-  console.log(C.b("Cấu hình MCP cho agent (stdio bridge)\n"));
+  console.log(C.b("MCP configuration for your agent (stdio bridge)\n"));
   console.log(C.d("Claude Code:"));
   console.log(`  claude mcp add brain -- ${cmd} ${args.join(" ")}\n`);
   console.log(C.d("Codex (~/.codex/config.toml):"));
   console.log(`  [mcp_servers.brain]\n  command = "${cmd}"\n  args = ${JSON.stringify(args)}\n`);
-  console.log(C.d(".mcp.json của project:"));
+  console.log(C.d("Project .mcp.json:"));
   console.log(JSON.stringify({ mcpServers: { brain: { command: cmd, args } } }, null, 2));
-  console.log(C.y("\nGhi xong phải RESTART agent — agent không hot-reload MCP."));
+  console.log(C.y("\nRESTART the agent after saving - agents do not hot-reload MCP."));
   return 0;
 }
 
 async function doctor() {
-  console.log(C.b("ALICE CODING — kiểm tra môi trường\n"));
+  console.log(C.b("ALICE CODING - environment check\n"));
   let blocking = 0;
 
   console.log(`[${OK}] Node ${process.version}`);
 
   const py = findPython();
   if (py) console.log(`[${OK}] Python ${py.version} (${[py.cmd, ...py.pre].join(" ")})`);
-  else { console.log(`[${ERR}] Python — KHÔNG thấy. Cần 3.9+; verify/sync/update đều cần.`); blocking++; }
+  else { console.log(`[${ERR}] Python - NOT found. 3.9+ is required by verify/sync/update.`); blocking++; }
 
   const d = findDocker();
-  if (d) console.log(`[${OK}] Docker ${d.version} — ${d.kind === "wsl" ? "Docker CE trong WSL" : "Desktop/native"}`);
+  if (d) console.log(`[${OK}] Docker ${d.version} - ${d.kind === "wsl" ? "Docker CE inside WSL" : "Desktop/native"}`);
   else {
-    console.log(`[${ERR}] Docker — không thấy daemon nào đang chạy. Brain sẽ không dựng được.`);
-    console.log(C.d("       (không có Docker vẫn dùng được chế độ file: brain = disabled)"));
+    console.log(`[${ERR}] Docker - no running daemon. The brain cannot be built.`);
+    console.log(C.d("       (without Docker you can still work in file mode: brain = disabled)"));
     blocking++;
   }
 
   const cfg = fs.existsSync(path.join(ROOT, "brain", "brain.config"));
-  console.log(`[${cfg ? OK : WARN}] brain.config ${cfg ? "đã có" : "chưa có — copy từ brain/brain.config.example khi cần sync"}`);
+  console.log(`[${cfg ? OK : WARN}] brain.config ${cfg ? "present" : "missing - copy brain/brain.config.example when you need sync"}`);
 
   const ready = await get("http://localhost:8000/api/v1/system/ready");
   if (ready && ready.status === 200) {
-    console.log(`[${OK}] ALICE API sẵn sàng (localhost:8000)`);
+    console.log(`[${OK}] ALICE API ready (localhost:8000)`);
     const cap = await get("http://localhost:8000/api/v1/system/capabilities");
     let llm = null;
     try { llm = JSON.parse(cap.body).llm_configured; } catch (_) {}
-    if (llm === true) console.log(`[${OK}] LLM đã cấu hình — sẵn sàng ingest`);
-    else if (llm === false) console.log(`[${WARN}] LLM CHƯA cấu hình → mở http://localhost:3000 → Settings → Models`);
-    else console.log(`[${WARN}] Không đọc được /system/capabilities (API khác version?)`);
+    if (llm === true) console.log(`[${OK}] LLM configured - ready to ingest`);
+    else if (llm === false) console.log(`[${WARN}] LLM NOT configured - open http://localhost:3000 -> Settings -> Models`);
+    else console.log(`[${WARN}] Could not read /system/capabilities (API version mismatch?)`);
   } else {
-    console.log(`[${WARN}] ALICE API chưa lên — chạy ${C.b("npm run brain")}`);
+    console.log(`[${WARN}] ALICE API is down - run ${C.b("npm run brain")}`);
   }
 
-  console.log(C.b("\nKho tri thức:"));
+  console.log(C.b("\nKnowledge base:"));
   const rc = python("tools/verify.py", []);
   if (rc !== 0) blocking++;
 
-  console.log(C.b("\nLệnh gốc (nếu không muốn dùng npm):"));
+  console.log(C.b("\nRaw commands (if you would rather skip npm):"));
   console.log(C.d(IS_WIN
     ? "  powershell -File brain\\stack\\brain-up.ps1\n  python tools\\verify.py\n  python brain\\sync\\sync.py"
     : "  bash brain/stack/brain-up.sh\n  python3 tools/verify.py\n  python3 brain/sync/sync.py"));
 
-  console.log(blocking ? C.r(`\n${blocking} vấn đề chặn đường. Xử lý rồi chạy lại.`)
-                       : C.g("\nMọi thứ ổn."));
+  console.log(blocking ? C.r(`\n${blocking} blocking issue(s). Fix them and run again.`)
+                       : C.g("\nAll good."));
   return blocking ? 1 : 0;
 }
 
@@ -494,21 +492,21 @@ const [cmd, ...rest] = process.argv.slice(2);
     case "mcp":      process.exit(mcp());
     case "doctor":   process.exit(await doctor());
     default:
-      console.log(`Dùng: node tools/cli.js <lệnh>
+      console.log(`Usage: node tools/cli.js <command>
 
-  doctor    kiểm môi trường (Docker/Python/API/LLM/kho tri thức)
-  up        dựng brain stack (tự chọn launcher đúng môi trường)
-  down      tắt stack          restart   khởi động lại
-  status    trạng thái brain của project này
-  list      MỌI brain trên máy (id, cổng, đang chạy hay không)
-  logs      xem log (-f)       pull      kéo lại model embedding
-  uninstall gỡ Docker + runtime brain (GIỮ tri thức)      cần --yes
-  reset     XOÁ tri thức project + kéo lại template mới   cần --yes
-  verify    kiểm kho tri thức  sync      đồng bộ file -> não
-  update    nâng cấp template  mcp       in cấu hình MCP cho agent
+  doctor    check the environment (Docker/Python/API/LLM/knowledge base)
+  up        build and start the brain stack (picks the right launcher)
+  down      stop the stack     restart   restart it
+  status    status of this project's brain
+  list      EVERY brain on this machine (id, ports, running or not)
+  logs      tail the log (-f)  pull      re-pull the embedding model
+  uninstall remove Docker + brain runtime (KEEPS knowledge)   needs --yes
+  reset     DELETE project knowledge + pull a fresh template  needs --yes
+  verify    check the knowledge base   sync    push files into the brain
+  update    upgrade the template       mcp     print the MCP config for your agent
 
-Qua npm: npm run doctor · npm run brain · npm run verify · npm run sync
-Lệnh phá huỷ: npm run uninstall -- --yes   ·   npm run reset -- --yes`);
+Via npm: npm run doctor | npm run brain | npm run verify | npm run sync
+Destructive: npm run uninstall -- --yes   |   npm run reset -- --yes`);
       process.exit(cmd ? 2 : 0);
   }
 })();

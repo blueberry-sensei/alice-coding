@@ -149,15 +149,15 @@ async function pickPort(preferred, taken, reserved) {
       return port;
     }
   }
-  throw new Error(`Không tìm được cổng trống quanh ${preferred}.`);
+  throw new Error(`No free port found near ${preferred}.`);
 }
 
 /* ----------------------------------------------------------------- resolve */
 
-const HEADER = `# Cấu hình brain của MỘT project. File này nằm NGOÀI repo có chủ đích:
-# SAG_SECRET_KEY vừa ký JWT vừa là gốc dẫn xuất khoá mã hoá mọi API key trong DB.
-# Không commit, không chép vào repo, không dán vào chat.
-# Sinh/cập nhật tự động bởi brain/stack/brain-env.js.`;
+const HEADER = `# Configuration for ONE project's brain. This file lives OUTSIDE the repo on purpose:
+# SAG_SECRET_KEY signs JWTs and derives the key that encrypts every API key in the database.
+# Never commit it, never copy it into a repo, never paste it into a chat.
+# Written and updated automatically by brain/stack/brain-env.js.`;
 
 /**
  * Trả về toàn bộ biến cần cho compose, tạo/sửa state khi thiếu.
@@ -216,9 +216,9 @@ async function resolve({ root = ROOT } = {}) {
   if (legacy && fs.existsSync(legacyFile)) {
     fs.writeFileSync(
       path.join(STACK, ".env.moved"),
-      `# .env cua brain da chuyen ra ngoai repo (khong con secret nao trong cay repo).\n`
-        + `# Vi tri moi: ${envFile}\n`
-        + `# Sua cau hinh thi sua file do, hoac chay: npm run brain\n`,
+      `# The brain .env moved outside the repo (no secret is left inside the repo tree).\n`
+        + `# New location: ${envFile}\n`
+        + `# Edit that file to change settings, or simply run: npm run brain\n`,
     );
     fs.rmSync(legacyFile);
   }
@@ -318,7 +318,7 @@ async function main() {
   for (const [key, value] of Object.entries(env)) {
     if (mode === "--shell") process.stdout.write(`export ${key}=${quoteSh(value)}\n`);
     else if (mode === "--powershell") process.stdout.write(`$env:${key}=${quotePs(value)}\n`);
-    else throw new Error(`Chế độ không hiểu: ${mode}`);
+    else throw new Error(`Unknown mode: ${mode}`);
   }
 }
 

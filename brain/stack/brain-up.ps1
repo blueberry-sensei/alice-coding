@@ -22,18 +22,18 @@ try {
   Start-Transcript -Path (Join-Path $LogDir "brain-up.log") -Append | Out-Null
   $script:TranscriptOn = $true
 } catch {
-  Write-Host "[log] Không ghi được transcript ($($_.Exception.Message)); chỉ còn console."
+  Write-Host "[log] Cannot write the transcript ($($_.Exception.Message)); console output only."
   $script:TranscriptOn = $false
 }
 
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-  Write-Host "!! Can Node 18+ (brain-env.js tinh danh tinh brain)."; exit 1
+  Write-Host "!! Node 18+ required (brain-env.js resolves the brain identity)."; exit 1
 }
 
 # Danh tinh + cong + secret: tinh o MOT cho (brain-env.js) de launcher, cli.js va compose
 # khong bao gio lech nhau. File .env cua brain nam NGOAI repo - xem BRAIN_ENV_FILE.
 $envLines = & node (Join-Path $Stack "brain-env.js") --powershell
-if ($LASTEXITCODE -ne 0) { Write-Host "!! brain-env.js that bai."; exit 1 }
+if ($LASTEXITCODE -ne 0) { Write-Host "!! brain-env.js failed."; exit 1 }
 $envLines | ForEach-Object { Invoke-Expression $_ }
 
 $ComposeFiles = @("-f", (Join-Path $Stack "compose.yaml"))
@@ -44,13 +44,13 @@ if ($env:BRAIN_MODE -eq "dev") {
   foreach ($pair in @(@("ALICE_APP_PATH", "apps/api"), @("ALICE_CORE_PATH", "pyproject.toml"))) {
     $dir = [Environment]::GetEnvironmentVariable($pair[0])
     if (-not (Test-Path (Join-Path $dir $pair[1]))) {
-      Write-Host "!! $($pair[0]) sai: $dir"
-      Write-Host "   Thu muc nay phai chua '$($pair[1])'. Sua trong: $($env:BRAIN_ENV_FILE)"
+      Write-Host "!! $($pair[0]) is wrong: $dir"
+      Write-Host "   That directory must contain '$($pair[1])'. Fix it in: $($env:BRAIN_ENV_FILE)"
       exit 1
     }
   }
   $ComposeFiles += @("-f", (Join-Path $Stack "compose.dev.yaml"))
-  Write-Host "Che do DEV: build tu source tren may."
+  Write-Host "DEV mode: building from local sources."
   Write-Host "  ALICE_APP_PATH  = $($env:ALICE_APP_PATH)"
   Write-Host "  ALICE_CORE_PATH = $($env:ALICE_CORE_PATH)"
   # additional_contexts (compose >= 2.17) can BuildKit.
@@ -59,45 +59,45 @@ if ($env:BRAIN_MODE -eq "dev") {
 }
 
 if ($env:BIND_ADDRESS -ne "127.0.0.1") {
-  Write-Host "!! CANH BAO: BIND_ADDRESS=$($env:BIND_ADDRESS) -> brain mo ra ngoai may qua HTTP KHONG ma hoa."
-  Write-Host "   API key nhap tren UI se di qua mang o dang doc duoc. Chi dung tren mang tin cay."
+  Write-Host "!! WARNING: BIND_ADDRESS=$($env:BIND_ADDRESS) exposes the brain off this machine over PLAIN HTTP."
+  Write-Host "   API keys typed in the UI would travel the network in the clear. Trusted networks only."
 }
 
 Write-Host "BRAIN_ID     = $($env:BRAIN_ID)"
-Write-Host "Che do       = $($env:BRAIN_MODE)"
+Write-Host "Mode         = $($env:BRAIN_MODE)"
 Write-Host "BIND_ADDRESS = $($env:BIND_ADDRESS)"
-Write-Host "Cong         = web $($env:WEB_PORT) - api $($env:API_PORT) - checklist $($env:CHECKLIST_PORT)"
+Write-Host "Ports        = web $($env:WEB_PORT) | api $($env:API_PORT) | checklist $($env:CHECKLIST_PORT)"
 
 $dc = @("compose", "-p", $env:BRAIN_ID) + $ComposeFiles + @("--env-file", $env:BRAIN_ENV_FILE)
 
 if ($env:BRAIN_MODE -eq "dev") {
   docker @dc up -d --build
 } else {
-  Write-Host "Keo image ALICE (lan dau vai phut)..."
+  Write-Host "Pulling ALICE images (a few minutes the first time)..."
   docker @dc pull
   if ($LASTEXITCODE -ne 0) {
-    Write-Host "!! Khong keo duoc image. Kiem mang, hoac image chua duoc publish."
-    Write-Host "   Co source tren may? Dat ALICE_APP_PATH + ALICE_CORE_PATH trong $($env:BRAIN_ENV_FILE)"
-    Write-Host "   de build tu do thay vi keo image."
+    Write-Host "!! Could not pull the images. Check your network, or they may not be published yet."
+    Write-Host "   Have the sources locally? Set ALICE_APP_PATH + ALICE_CORE_PATH in $($env:BRAIN_ENV_FILE)"
+    Write-Host "   to build from them instead of pulling."
     if ($script:TranscriptOn) { try { Stop-Transcript | Out-Null } catch {} }
     exit 1
   }
   docker @dc up -d
 }
 if ($LASTEXITCODE -ne 0) {
-  Write-Host "!! Build/khoi dong that bai. Log day du: $(Join-Path $LogDir 'brain-up.log')"
+  Write-Host "!! Build/startup failed. Full log: $(Join-Path $LogDir 'brain-up.log')"
   if ($script:TranscriptOn) { try { Stop-Transcript | Out-Null } catch {} }
   exit 1
 }
 
-Write-Host "Keo model embedding bge-m3 (lan dau vai phut)..."
+Write-Host "Pulling the bge-m3 embedding model (a few minutes the first time)..."
 docker @dc exec -T embedding ollama pull bge-m3
-if ($LASTEXITCODE -ne 0) { Write-Host "!! Pull loi. Chay tay: npm run brain:pull" }
+if ($LASTEXITCODE -ne 0) { Write-Host "!! Model pull failed. Run it manually: npm run brain:pull" }
 
 Write-Host ""
 Write-Host "==> Checklist: http://localhost:$($env:CHECKLIST_PORT)"
 Write-Host "==> ALICE app: http://localhost:$($env:WEB_PORT)"
-Write-Host "==> Log dung stack: $(Join-Path $LogDir 'brain-up.log')"
-Write-Host "==> Log API + engine: $(Join-Path $env:BRAIN_LOGS 'sag-api.log')"
-Write-Host "==> Cau hinh brain (NGOAI repo, co secret - dung commit): $($env:BRAIN_ENV_FILE)"
+Write-Host "==> Stack build log: $(Join-Path $LogDir 'brain-up.log')"
+Write-Host "==> API + engine log: $(Join-Path $env:BRAIN_LOGS 'sag-api.log')"
+Write-Host "==> Brain config (OUTSIDE the repo, holds a secret - never commit): $($env:BRAIN_ENV_FILE)"
 if ($script:TranscriptOn) { try { Stop-Transcript | Out-Null } catch {} }

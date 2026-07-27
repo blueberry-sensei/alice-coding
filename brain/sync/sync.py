@@ -82,7 +82,7 @@ def _install_file_log():
             LOG_FILE.replace(LOG_FILE.with_suffix(".log.1"))
         handle = LOG_FILE.open("a", encoding="utf-8")
     except OSError as error:
-        print("[brain-sync] không ghi được log ra file (%s); chỉ còn console" % error)
+        print("[brain-sync] cannot write the log file (%s); console output only" % error)
         return
     sys.stdout = _Tee(sys.stdout, handle, "OUT")
     sys.stderr = _Tee(sys.stderr, handle, "ERR")
@@ -133,8 +133,8 @@ def http(method, url, token=None, data=None):
         detail = e.read().decode("utf-8", "replace")[:300]
         raise SystemExit("[brain-sync] HTTP %s %s %s: %s" % (e.code, method, url, detail))
     except urllib.error.URLError as e:
-        raise SystemExit("[brain-sync] Không kết nối được %s (%s). SAG đã chạy chưa? "
-                         "Kiểm: docker compose ps + /system/ready" % (url, e))
+        raise SystemExit("[brain-sync] Cannot reach %s (%s). Is the brain running? "
+                         "Check: docker compose ps + /system/ready" % (url, e))
 
 
 def as_items(res):
@@ -152,7 +152,7 @@ def get_token(cfg):
     res = http("POST", cfg["SAG_API_BASE"] + "/auth/login", data={"name": cfg["SAG_AUTH_NAME"]})
     tok = res.get("access_token") or res.get("token")
     if not tok:
-        raise SystemExit("[brain-sync] Login thất bại: %s" % res)
+        raise SystemExit("[brain-sync] Login failed: %s" % res)
     return tok
 
 
@@ -164,7 +164,7 @@ def ensure_source(cfg, token):
     created = http("POST", base + "/sources", token=token, data={"name": name})
     sid = created.get("id")
     if not sid:
-        raise SystemExit("[brain-sync] Tạo source thất bại: %s" % created)
+        raise SystemExit("[brain-sync] Could not create the source: %s" % created)
     return sid
 
 
@@ -212,11 +212,11 @@ def run_verify(skip):
     kỷ luật trở thành bắt buộc mà vẫn không cần hook riêng của agent nào.
     """
     if skip:
-        print("[brain-sync] BỎ QUA verify (--no-verify) — chỉ dùng khi đang gỡ lỗi.")
+        print("[brain-sync] SKIPPING verify (--no-verify) - debugging only.")
         return
     script = KNOWLEDGE_DIR / "tools" / "verify.py"
     if not script.exists():
-        print("[brain-sync] ! không thấy tools/verify.py — bỏ qua gate.")
+        print("[brain-sync] ! tools/verify.py not found - skipping the gate.")
         return
     proc = subprocess.run([sys.executable, str(script)], cwd=str(KNOWLEDGE_DIR))
     if proc.returncode != 0:
@@ -239,7 +239,7 @@ def delete_doc(cfg, token, source_id, doc_id):
         http("DELETE", "%s/sources/%s/documents/%s" % (cfg["SAG_API_BASE"], source_id, doc_id),
              token=token)
     except SystemExit as e:
-        print("  ! bỏ qua lỗi xoá %s: %s" % (doc_id, e))
+        print("  ! ignoring delete error for %s: %s" % (doc_id, e))
 
 
 def main():
@@ -264,7 +264,7 @@ def main():
         return str(p.relative_to(root)).replace("\\", "/")
 
     if args.rebuild:
-        print("[brain-sync] REBUILD: xoá toàn bộ document trong source rồi ingest lại...")
+        print("[brain-sync] REBUILD: deleting every document in the source, then re-ingesting...")
         for d in as_items(http("GET", "%s/sources/%s/documents" % (cfg["SAG_API_BASE"], source_id),
                                 token=token)):
             delete_doc(cfg, token, source_id, d.get("id"))
@@ -298,9 +298,9 @@ def main():
             print("  - delete %s" % r)
 
     save_state(cfg, state)
-    print("[brain-sync] xong: +%d ~%d -%d (bỏ qua %d). source=%s (%s)"
+    print("[brain-sync] done: +%d ~%d -%d (skipped %d). source=%s (%s)"
           % (created, updated, deleted, skipped, cfg["BRAIN_SOURCE_NAME"], source_id))
-    print("[brain-sync] extract event/entity chạy nền trong SAG; đợi document READY trước khi search.")
+    print("[brain-sync] event/entity extraction runs in the background; wait for READY before searching.")
 
 
 if __name__ == "__main__":
@@ -314,5 +314,5 @@ if __name__ == "__main__":
         import traceback
 
         traceback.print_exc()
-        print("[brain-sync] THẤT BẠI — chi tiết ở %s" % LOG_FILE)
+        print("[brain-sync] FAILED - details in %s" % LOG_FILE)
         raise

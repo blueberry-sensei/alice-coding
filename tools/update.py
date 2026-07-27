@@ -144,7 +144,7 @@ def fetch_template(ref):
         if proc.returncode == 0:
             shutil.rmtree(dest / ".git", ignore_errors=True)
             return tmp, dest
-        print("[update] git clone thất bại (%s), thử tarball..."
+        print("[update] git clone failed (%s), falling back to the tarball..."
               % proc.stderr.strip().splitlines()[-1:] or "")
     url = "%s/archive/refs/heads/%s.tar.gz" % (REPO, ref or "main")
     if ref and ref.startswith("v"):
@@ -157,13 +157,13 @@ def fetch_template(ref):
             tf.extractall(tmp)
     except Exception as e:
         shutil.rmtree(tmp, ignore_errors=True)
-        raise SystemExit("[update] Không tải được template từ %s (%s).\n"
-                         "  Kiểm mạng, hoặc đặt ALICE_TEMPLATE_REPO nếu bạn fork." % (url, e))
+        raise SystemExit("[update] Could not download the template from %s (%s).\n"
+                         "  Check your network, or set ALICE_TEMPLATE_REPO if you forked." % (url, e))
     for child in tmp.iterdir():
         if child.is_dir() and child.name != "tpl":
             return tmp, child
     shutil.rmtree(tmp, ignore_errors=True)
-    raise SystemExit("[update] Tarball không có thư mục gốc như mong đợi.")
+    raise SystemExit("[update] The tarball has no top-level directory as expected.")
 
 
 # -------------------------------------------------------------- migrations
@@ -171,14 +171,14 @@ def m_2_0_0(root, dry):
     """1.x -> 2.0.0: tách phần đặc tả project khỏi file template."""
     notes = []
     if (root / "ALICE.md").exists() and not (root / "ALICE.project.md").exists():
-        notes.append("tạo ALICE.project.md — chuyển phụ lục ‹đặc tả khi init› của "
-                     "ALICE.md sang đây (làm tay: copy phần cuối ALICE.md cũ)")
+        notes.append("create ALICE.project.md - move the project-specific appendix out "
+                     "of ALICE.md into it (by hand: copy the tail of the old ALICE.md)")
     if not (root / "wiki" / "ROUTER.md").exists() and (root / "wiki" / "README.md").exists():
-        notes.append("tạo wiki/ROUTER.md — chuyển bảng Router + Dictionary từ "
-                     "wiki/README.md sang đây (làm tay)")
+        notes.append("create wiki/ROUTER.md - move the Router + Dictionary tables out "
+                     "of wiki/README.md into it (by hand)")
     if not (root / "decisions").exists():
-        notes.append("thêm trụ cột decisions/ — rà context/ cũ, tách các luật bền "
-                     "của Bệ hạ ra thành entry D-XXXX")
+        notes.append("add the decisions/ pillar - review the old context/ and split "
+                     "the durable rules out into D-XXXX entries")
     return notes
 
 
@@ -200,7 +200,7 @@ def gen_manifest():
     MANIFEST.write_text(json.dumps(
         {"version": version, "generated": date.today().isoformat(), "files": files},
         ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print("[update] đã sinh tools/manifest.json — version %s, %d file template."
+    print("[update] wrote tools/manifest.json - version %s, %d template files."
           % (version, len(files)))
     return 0
 
@@ -212,12 +212,12 @@ def load_manifest():
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Nâng cấp template ALICE CODING")
-    ap.add_argument("--check", action="store_true", help="chỉ báo có bản mới hay không")
-    ap.add_argument("--dry-run", action="store_true", help="in kế hoạch, không ghi file")
-    ap.add_argument("--ref", default=None, help="branch/tag muốn lên (mặc định: main)")
+    ap = argparse.ArgumentParser(description="Upgrade the ALICE CODING template")
+    ap.add_argument("--check", action="store_true", help="only report whether a newer version exists")
+    ap.add_argument("--dry-run", action="store_true", help="print the plan without writing anything")
+    ap.add_argument("--ref", default=None, help="branch/tag to upgrade to (default: main)")
     ap.add_argument("--gen-manifest", action="store_true",
-                    help="(người bảo trì) sinh lại tools/manifest.json từ cây hiện tại")
+                    help="(maintainers) regenerate tools/manifest.json from the current tree")
     args = ap.parse_args()
 
     if args.gen_manifest:
@@ -228,12 +228,12 @@ def main():
     tmp, tpl = fetch_template(args.ref)
     try:
         new_ver = read_version(tpl)
-        print("[update] hiện tại: %s  →  template: %s" % (local_ver, new_ver))
+        print("[update] current: %s  ->  template: %s" % (local_ver, new_ver))
         if vtuple(new_ver) <= vtuple(local_ver) and not args.ref:
-            print("[update] Đang ở bản mới nhất. Không có gì để làm.")
+            print("[update] Already up to date. Nothing to do.")
             return 0
         if args.check:
-            print("[update] Có bản mới. Chạy `python tools/update.py` để nâng cấp.")
+            print("[update] A newer version exists. Run `python tools/update.py` to upgrade.")
             return 0
 
         new_files = collect(tpl)
@@ -269,20 +269,20 @@ def main():
                 for i in items:
                     print("    - %s" % i)
 
-        print("\n[update] KẾ HOẠCH%s" % (" (dry-run)" if args.dry_run else ""))
-        show("thêm mới", added)
-        show("cập nhật", updated)
-        show("tạo file mồi (chỉ khi chưa có)", seeded)
-        show("XUNG ĐỘT — bạn đã sửa tay, sẽ để bản mới ở *.new", conflicts)
-        show("template đã bỏ (giữ nguyên, tự xoá nếu muốn)", removed)
-        print("  giữ nguyên: %d file template không đổi" % len(unchanged))
-        print("  KHÔNG ĐỤNG: toàn bộ wiki/<module>.md, mistakes/LOG.md, decisions/LOG.md,\n"
+        print("\n[update] PLAN%s" % (" (dry-run)" if args.dry_run else ""))
+        show("added", added)
+        show("updated", updated)
+        show("seeded (only when missing)", seeded)
+        show("CONFLICT - you edited these, the new copy lands in *.new", conflicts)
+        show("dropped from the template (left in place; delete if you want)", removed)
+        print("  unchanged: %d template files" % len(unchanged))
+        print("  UNTOUCHED: every wiki/<module>.md, mistakes/LOG.md, decisions/LOG.md,\n"
               "              context/*, changelog/<module>.md, ALICE.project.md, "
               "wiki/ROUTER.md, brain.config")
 
         if args.dry_run:
             if notes:
-                print("\n[update] việc phải làm tay sau khi nâng cấp:")
+                print("\n[update] manual steps required after upgrading:")
                 for n in notes:
                     print("    - %s" % n)
             return 0
@@ -307,18 +307,18 @@ def main():
                  "files": {rel: sha(tpl / rel) for rel in new_files}},
                 ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-        print("\n[update] XONG: +%d mới · ~%d cập nhật · %d mồi · %d xung đột"
+        print("\n[update] DONE: +%d added | ~%d updated | %d seeded | %d conflicts"
               % (len(added), len(updated), len(seeded), len(conflicts)))
         if conflicts:
-            print("[update] Xử lý xung đột: so `<file>` với `<file>.new`, gộp thủ công, "
-                  "rồi xoá bản .new.")
+            print("[update] Resolving conflicts: diff `<file>` against `<file>.new`, merge by hand, "
+                  "then delete the .new copy.")
         if notes:
-            print("\n[update] MIGRATION phải làm tay:")
+            print("\n[update] MIGRATION steps you must do by hand:")
             for n in notes:
                 print("    - %s" % n)
-            print("  Chi tiết: MIGRATIONS.md")
+            print("  Details: MIGRATIONS.md")
 
-        print("\n[update] Bước cuối bắt buộc: python tools/verify.py")
+        print("\n[update] Required final step: python tools/verify.py")
         return 0
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

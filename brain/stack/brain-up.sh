@@ -23,11 +23,11 @@ LOG_FILE="$LOG_DIR/brain-up.log"
 if command -v tee >/dev/null 2>&1 && mkdir -p "$LOG_DIR" 2>/dev/null; then
   exec > >(tee -a "$LOG_FILE") 2>&1
 else
-  echo "[log] Không ghi được log ra file; chỉ còn console."
+  echo "[log] Cannot write the log file; console output only."
   LOG_FILE=""
 fi
 
-command -v node >/dev/null 2>&1 || { echo "!! Cần Node 18+ (brain-env.js tính danh tính brain)."; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "!! Node 18+ required (brain-env.js resolves the brain identity)."; exit 1; }
 
 # Danh tính + cổng + secret: tính ở MỘT chỗ (brain-env.js) để launcher, cli.js và compose
 # không bao giờ lệch nhau. File .env của brain nằm NGOÀI repo — xem BRAIN_ENV_FILE.
@@ -42,13 +42,13 @@ if [ "$BRAIN_MODE" = "dev" ]; then
     key="${pair%%:*}"; must="${pair##*:}"
     eval "dir=\$$key"
     [ -e "$dir/$must" ] || {
-      echo "!! $key sai: $dir"
-      echo "   Thư mục này phải chứa '$must'. Sửa trong: $BRAIN_ENV_FILE"
+      echo "!! $key is wrong: $dir"
+      echo "   That directory must contain '$must'. Fix it in: $BRAIN_ENV_FILE"
       exit 1
     }
   done
   COMPOSE_FILES+=(-f "$STACK/compose.dev.yaml")
-  echo "Chế độ DEV: build từ source trên máy."
+  echo "DEV mode: building from local sources."
   echo "  ALICE_APP_PATH  = $ALICE_APP_PATH"
   echo "  ALICE_CORE_PATH = $ALICE_CORE_PATH"
   export DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1   # additional_contexts cần BuildKit
@@ -58,40 +58,40 @@ fi
 # vẫn mở được). Bản cũ tự bật 0.0.0.0 khi thấy WSL — đó là lỗ thật: brain nói HTTP TRẦN, mở ra
 # ngoài nghĩa là API key gõ trên UI đi qua LAN ở dạng đọc được.
 if [ "${BIND_ADDRESS:-127.0.0.1}" != "127.0.0.1" ]; then
-  echo "!! CẢNH BÁO: BIND_ADDRESS=$BIND_ADDRESS → brain mở ra ngoài máy qua HTTP KHÔNG mã hoá."
-  echo "   API key nhập trên UI sẽ đi qua mạng ở dạng đọc được. Chỉ dùng trên mạng tin cậy."
+  echo "!! WARNING: BIND_ADDRESS=$BIND_ADDRESS exposes the brain off this machine over PLAIN HTTP."
+  echo "   API keys typed in the UI would travel the network in the clear. Trusted networks only."
 fi
 
 echo "BRAIN_ID     = $BRAIN_ID"
-echo "Chế độ       = $BRAIN_MODE"
+echo "Mode         = $BRAIN_MODE"
 echo "BIND_ADDRESS = $BIND_ADDRESS"
-echo "Cổng         = web $WEB_PORT · api $API_PORT · checklist $CHECKLIST_PORT"
+echo "Ports        = web $WEB_PORT | api $API_PORT | checklist $CHECKLIST_PORT"
 
 dc() { docker compose -p "$BRAIN_ID" "${COMPOSE_FILES[@]}" --env-file "$BRAIN_ENV_FILE" "$@"; }
 
 if [ "$BRAIN_MODE" = "dev" ]; then
   dc up -d --build
 else
-  echo "Kéo image ALICE (lần đầu vài phút)..."
+  echo "Pulling ALICE images (a few minutes the first time)..."
   dc pull || {
-    echo "!! Không kéo được image. Kiểm mạng, hoặc image chưa được publish."
-    echo "   Có source trên máy? Đặt ALICE_APP_PATH + ALICE_CORE_PATH trong $BRAIN_ENV_FILE"
-    echo "   để build từ đó thay vì kéo image."
+    echo "!! Could not pull the images. Check your network, or they may not be published yet."
+    echo "   Have the sources locally? Set ALICE_APP_PATH + ALICE_CORE_PATH in $BRAIN_ENV_FILE"
+    echo "   to build from them instead of pulling."
     exit 1
   }
   dc up -d
 fi
 
-echo "Kéo model embedding bge-m3 (lần đầu vài phút)..."
+echo "Pulling the bge-m3 embedding model (a few minutes the first time)..."
 dc exec -T embedding ollama pull bge-m3 \
-  || echo "!! Pull model lỗi. Chạy tay: npm run brain:pull"
+  || echo "!! Model pull failed. Run it manually: npm run brain:pull"
 
 echo ""
 echo "==> Checklist: http://localhost:${CHECKLIST_PORT}"
 echo "==> ALICE app: http://localhost:${WEB_PORT}"
-[ -n "$LOG_FILE" ] && echo "==> Log dựng stack: $LOG_FILE"
-echo "==> Log API + engine: $BRAIN_LOGS/sag-api.log"
-echo "==> Cấu hình brain (NGOÀI repo, có secret — đừng commit): $BRAIN_ENV_FILE"
+[ -n "$LOG_FILE" ] && echo "==> Stack build log: $LOG_FILE"
+echo "==> API + engine log: $BRAIN_LOGS/sag-api.log"
+echo "==> Brain config (OUTSIDE the repo, holds a secret - never commit): $BRAIN_ENV_FILE"
 
 # WSL: VM tự tắt khi phiên launcher cuối cùng kết thúc → brain tắt theo. Bản cũ giữ VM sống
 # bằng cách CHẶN terminal ở `logs -f`, nên đóng cửa sổ là mất brain và không làm được việc khác.
@@ -101,6 +101,6 @@ if grep -qiE "microsoft|wsl" /proc/version 2>/dev/null; then
     setsid nohup bash -c 'exec -a alice-brain-keepalive sleep infinity' >/dev/null 2>&1 < /dev/null &
     disown 2>/dev/null || true
   fi
-  echo "==> WSL: đã để tiến trình nền giữ distro sống. Đóng terminal này vẫn OK."
-  echo "    Tắt hẳn: npm run brain:down"
+  echo "==> WSL: a background process keeps the distro alive. Closing this terminal is fine."
+  echo "    Stop it for good: npm run brain:down"
 fi

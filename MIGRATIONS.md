@@ -6,6 +6,16 @@ Quy ước version: **semver**. MAJOR đổi = có breaking change bắt buộc 
 
 ---
 
+## 2.3.2 — WSL mở lại được localhost
+
+**Không breaking.** `npm run update` rồi `npm run brain`.
+
+- 2.3.1 đặt `BIND_ADDRESS=127.0.0.1` cho **mọi** môi trường. Trong WSL đó là loopback của
+  *distro*, relay localhost của WSL2 không với tới → Windows mở `localhost:<port>` là hỏng.
+  Nay WSL quay lại `0.0.0.0`; nơi khác vẫn `127.0.0.1`.
+- `0.0.0.0` trong WSL **không** giống trên máy thật: WSL2 mặc định NAT nên chỉ Windows host
+  chuyển tiếp vào được. Trừ khi bật *mirrored networking* — launcher có in ghi chú.
+
 ## 2.3.1 — Launcher tự cài Node trong WSL; bỏ trang checklist
 
 **Không breaking.** Nâng cấp bằng `npm run update` rồi `npm run brain`.

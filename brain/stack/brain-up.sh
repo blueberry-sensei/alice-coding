@@ -84,12 +84,32 @@ if [ "$BRAIN_MODE" = "dev" ]; then
   export DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1   # additional_contexts cần BuildKit
 fi
 
-# BIND_ADDRESS mặc định 127.0.0.1, kể cả trên WSL (WSL2 chuyển tiếp localhost sẵn nên Windows
-# vẫn mở được). Bản cũ tự bật 0.0.0.0 khi thấy WSL — đó là lỗ thật: brain nói HTTP TRẦN, mở ra
-# ngoài nghĩa là API key gõ trên UI đi qua LAN ở dạng đọc được.
-if [ "${BIND_ADDRESS:-127.0.0.1}" != "127.0.0.1" ]; then
-  echo "!! WARNING: BIND_ADDRESS=$BIND_ADDRESS exposes the brain off this machine over PLAIN HTTP."
-  echo "   API keys typed in the UI would travel the network in the clear. Trusted networks only."
+# BIND_ADDRESS: 127.0.0.1 ở mọi nơi, TRỪ WSL.
+#
+# Trong WSL, container publish lên 127.0.0.1 là loopback CỦA DISTRO — relay localhost của WSL2
+# không với tới, nên Windows mở `localhost:<port>` là hỏng. Phải 0.0.0.0 thì mới dùng được.
+#
+# 0.0.0.0 ở đây KHÔNG giống 0.0.0.0 trên máy thật: WSL2 mặc định chạy NAT, distro có IP riêng
+# (172.x) và chỉ Windows host chuyển tiếp vào được — máy khác trong LAN không tới thẳng được.
+# Ngoại lệ là WSL ở chế độ *mirrored networking*: lúc đó nó ĐÚNG là phơi ra LAN.
+if [ -z "${BIND_ADDRESS:-}" ]; then
+  if grep -qiE "microsoft|wsl" /proc/version 2>/dev/null; then
+    BIND_ADDRESS=0.0.0.0
+  else
+    BIND_ADDRESS=127.0.0.1
+  fi
+  export BIND_ADDRESS
+fi
+
+if [ "$BIND_ADDRESS" != "127.0.0.1" ]; then
+  if grep -qiE "microsoft|wsl" /proc/version 2>/dev/null; then
+    echo "note: BIND_ADDRESS=0.0.0.0 (bắt buộc để Windows mở được localhost qua WSL)."
+    echo "      WSL ở chế độ 'mirrored networking' thì đây là phơi ra LAN qua HTTP trần —"
+    echo "      lúc đó đặt BIND_ADDRESS=127.0.0.1 trong $BRAIN_ENV_FILE và dùng IP của distro."
+  else
+    echo "!! WARNING: BIND_ADDRESS=$BIND_ADDRESS exposes the brain off this machine over PLAIN HTTP."
+    echo "   API keys typed in the UI would travel the network in the clear. Trusted networks only."
+  fi
 fi
 
 echo "BRAIN_ID     = $BRAIN_ID"

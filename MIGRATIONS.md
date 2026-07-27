@@ -35,6 +35,8 @@ Ba vấn đề của bản cũ, cùng một gốc: stack bị ghim cứng vào *
 - `BIND_ADDRESS` luôn `127.0.0.1` (bản cũ tự mở `0.0.0.0` trên WSL — brain nói HTTP trần nên đó là đường để API key đi qua LAN ở dạng đọc được).
 - Trên WSL, launcher không còn chiếm terminal; brain chạy nền, tắt bằng `npm run brain:down`.
 - Lệnh mới: `npm run brain:list` (mọi brain trên máy), `npm run brain:pull` (kéo lại model embedding).
+- `npm run uninstall -- --yes` nay dọn cả **image mồ côi** và **build cache** (bản cũ để lại vài
+  chục GB sau khi "gỡ"). Có project Docker khác trên máy thì thêm `--keep-cache`.
 
 ## 2.2.0 — LLM cấu hình một chỗ trên app, nhiều provider tự chuyển nhà, log ra file
 

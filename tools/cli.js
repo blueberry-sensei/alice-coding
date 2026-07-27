@@ -98,6 +98,9 @@ function composeEnv() {
     CHECKLIST_PORT: info.CHECKLIST_PORT,
     ALICE_APP_PATH: abs(map.ALICE_APP_PATH, "alice-brain"),
     ALICE_CORE_PATH: abs(map.ALICE_CORE_PATH, "alice-core"),
+    // compose.dev.yaml nội suy ${BRAIN_ID} vào tag image. Thiếu biến này thì `down`/`uninstall`
+    // ở chế độ dev nhìn ra tag rỗng và KHÔNG xoá được image vừa build.
+    BRAIN_ID: info.BRAIN_ID,
     _BRAIN_ID: info.BRAIN_ID,
     _ENV_FILE: info.BRAIN_ENV_FILE,
     _MODE: info.BRAIN_MODE,
@@ -136,16 +139,16 @@ function insideRoot(p) {
 
 /** Mục tiêu sẽ bị xoá khi uninstall — tính TỪ .env (đọc trước khi xoá .env). */
 function uninstallTargets() {
-  const env = composeEnv();                 // đọc BRAIN_DATA tuỳ biến TRƯỚC khi xoá .env
-  const dataDir = env ? env.BRAIN_DATA      // mặc định ../.sag-data (so với brain/stack)
-                      : path.resolve(STACK, "../.sag-data");
+  // Dữ liệu não nay ở named volume; thư mục dưới đây chỉ còn là tàn dư của bản bind-mount cũ.
+  const dataDir = path.resolve(STACK, "../.sag-data");
   return [
     // Dữ liệu não nay nằm trong NAMED VOLUME của Docker (`down --volumes` ở trên xoá nó).
     // Thư mục dưới đây chỉ còn là tàn dư của bản trước khi chuyển sang volume.
     { p: dataDir, what: "dữ liệu não bản cũ (bind-mount, nếu còn sót)" },
     { p: path.join(STACK, "alice-brain"), what: "source ứng dụng do launcher clone" },
     { p: path.join(STACK, "alice-core"), what: "source engine do launcher clone" },
-    { p: path.join(STACK, ".env"), what: "cấu hình stack (chứa SAG_SECRET_KEY)" },
+    { p: path.join(STACK, ".env"), what: "cấu hình stack bản cũ (nếu còn sót)" },
+    { p: path.join(STACK, ".env.moved"), what: "ghi chú vị trí .env mới" },
     { p: path.join(ROOT, "brain", "brain.config"), what: "cấu hình sync (chứa token)" },
     { p: path.join(ROOT, "brain", ".sync-state.json"), what: "map file→document của sync" },
   ];
@@ -159,8 +162,15 @@ function uninstall(argv) {
   const yes = argv.includes("--yes") || argv.includes("-y");
   const targets = uninstallTargets().filter((t) => fs.existsSync(t.p));
 
+  const brain = brainEnv.peek();
+  const keepCache = argv.includes("--keep-cache");
+
   console.log(C.b("Sẽ gỡ:"));
-  console.log("  • container + image + volume của compose project " + C.b("alice-brain"));
+  console.log("  • container + network + volume + image của brain " + C.b(brain.BRAIN_ID));
+  console.log("  • image mồ côi (dangling) do các lần build brain để lại");
+  console.log(keepCache
+    ? C.d("  • build cache: GIỮ (đang bật --keep-cache)")
+    : "  • build cache của Docker " + C.y("— dùng chung CẢ MÁY, xem ghi chú bên dưới"));
   if (!targets.length) console.log(C.d("  • (không còn file runtime nào trên đĩa)"));
   for (const t of targets) {
     const outside = !insideRoot(t.p);
@@ -168,6 +178,12 @@ function uninstall(argv) {
       + (outside ? C.y("  [NGOÀI thư mục project — sẽ BỎ QUA]") : ""));
   }
   console.log(C.g("\nGiữ nguyên: ") + "wiki/ · mistakes/ · decisions/ · context/ · changelog/ · ALICE.project.md");
+
+  if (!keepCache) {
+    console.log(C.d("\nBuild cache không gắn nhãn theo project nên Docker không lọc được phần"));
+    console.log(C.d("riêng của brain — dọn là dọn cả máy. Không mất dữ liệu, chỉ khiến lần build"));
+    console.log(C.d("kế tiếp của MỌI project chậm hơn. Giữ lại: npm run uninstall -- --yes --keep-cache"));
+  }
 
   if (!yes) {
     console.log(C.y("\nĐây là thao tác KHÔNG hoàn tác được (dữ liệu não phải ingest lại từ đầu)."));
@@ -185,10 +201,39 @@ function uninstall(argv) {
       [...d.pre, "compose", "-p", env._BRAIN_ID, ...brainEnv.composeFiles(env._MODE),
        "--env-file", env._ENV_FILE, "down",
        "--volumes", "--remove-orphans", "--rmi", "local"], { cwd: STACK, env }) === 0;
-    if (!viaCompose) {                      // state mất hoặc compose lỗi -> dọn theo label
+    if (!viaCompose) {
+      // Lưới an toàn khi state mất hoặc compose lỗi: dọn theo label. Không có nhánh này thì
+      // brain bị xoá state sẽ để lại container và volume mồ côi mà không lệnh nào nhặt được.
       const ids = tryRun(d.cmd, [...d.pre, "ps", "-aq", "--filter",
-        `label=com.docker.compose.project=${brainEnv.brainId()}`]).out.split(/\s+/).filter(Boolean);
+        `label=com.docker.compose.project=${brain.BRAIN_ID}`]).out.split(/\s+/).filter(Boolean);
       if (ids.length && run(d.cmd, [...d.pre, "rm", "-f", ...ids]) !== 0) failed = true;
+      const vols = tryRun(d.cmd, [...d.pre, "volume", "ls", "-q", "--filter",
+        `label=com.docker.compose.project=${brain.BRAIN_ID}`]).out.split(/\s+/).filter(Boolean);
+      if (vols.length) run(d.cmd, [...d.pre, "volume", "rm", "-f", ...vols]);
+    }
+
+    // `compose down --rmi local` chỉ xoá image mà compose CÒN nhận ra. Image do các lần build
+    // trước để lại (đổi chế độ, đổi tag, project đã xoá state) thì nó không thấy → quét theo tên.
+    const images = tryRun(d.cmd, [...d.pre, "images", "--format", "{{.Repository}}:{{.Tag}}"])
+      .out.split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((name) => name && !name.endsWith(":<none>")
+        && (name.includes(brain.BRAIN_ID)
+          || name.startsWith("alice-brain-api:") || name.startsWith("alice-brain-web:")));
+    if (images.length) {
+      console.log(C.d(`Xoá ${images.length} image của brain này...`));
+      run(d.cmd, [...d.pre, "rmi", "-f", ...images]);
+    }
+
+    // Image mồ côi: an toàn tuyệt đối — theo định nghĩa là không tag và không container nào dùng.
+    run(d.cmd, [...d.pre, "image", "prune", "-f"]);
+
+    // Build cache là phần NẶNG NHẤT (vài chục GB sau ít lần build) và là lý do "gỡ rồi mà đĩa
+    // vẫn đầy". Docker không lọc cache theo project được nên đây là thao tác toàn máy — đã
+    // cảnh báo ở trên, `--keep-cache` để từ chối.
+    if (!keepCache) {
+      console.log(C.d("Dọn build cache của Docker..."));
+      run(d.cmd, [...d.pre, "builder", "prune", "-af"]);
     }
   }
 

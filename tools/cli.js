@@ -342,15 +342,12 @@ function up() {
     // Docker nằm TRONG distro, nên launcher chạy trong đó luôn — và mọi thứ nó cần
     // (Node, đường dẫn) phải là của Linux, không phải của Windows. Node trên Windows
     // KHÔNG dùng được ở đây; đó là lý do phải dò riêng thay vì để script tự chết.
-    const wslNode = tryRun("wsl", ["-e", "node", "--version"]);
-    if (!wslNode.ok) {
-      console.error(C.r("Node 18+ chưa có BÊN TRONG WSL."));
-      console.error(C.d("  Node trên Windows không dùng được: Docker và launcher đều chạy trong distro."));
-      console.error("  Mở terminal WSL rồi cài, ví dụ:");
-      console.error(C.b("    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt install -y nodejs"));
-      return 1;
+    // Không chặn ở đây: `brain-up.sh` tự cài Node vào $HOME của distro khi thiếu. Chỉ báo
+    // trước để người dùng biết vì sao lần chạy đầu lâu hơn.
+    if (!tryRun("wsl", ["-e", "node", "--version"]).ok) {
+      console.log(C.y("Node chưa có trong WSL — launcher sẽ tự cài (không cần sudo)."));
     }
-    console.log(C.d(`→ brain-up.sh inside WSL (Docker CE, node ${wslNode.out.trim()})`));
+    console.log(C.d("→ brain-up.sh inside WSL (Docker CE)"));
     return run("wsl", ["-e", "bash", "brain/stack/brain-up.sh"]);
   }
   console.log(C.d("→ brain-up.sh"));

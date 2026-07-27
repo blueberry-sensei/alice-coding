@@ -27,15 +27,37 @@ else
   LOG_FILE=""
 fi
 
-command -v node >/dev/null 2>&1 || {
-  echo "!! Node 18+ is required HERE, in the environment this script runs in."
-  if grep -qiE "microsoft|wsl" /proc/version 2>/dev/null; then
-    echo "   You are inside WSL. Node installed on Windows does NOT count - Docker and this"
-    echo "   launcher both run inside the distro. Install it here, for example:"
-    echo "     curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt install -y nodejs"
+# Node phải có Ở ĐÂY — trong môi trường script đang chạy. Trên WSL đó là distro, nên Node cài
+# bên Windows không tính. Thiếu thì launcher TỰ cài, không đẩy việc sang người dùng.
+#
+# Cài vào $HOME nên KHÔNG cần sudo: nhiều distro WSL không có sudo không mật khẩu, mà hỏi mật
+# khẩu giữa chừng thì launcher treo. Bản chính thức từ nodejs.org, giải nén là chạy.
+NODE_HOME="$HOME/.local/alice-node"
+export PATH="$NODE_HOME/bin:$PATH"
+
+if ! command -v node >/dev/null 2>&1; then
+  case "$(uname -m)" in
+    x86_64|amd64) NODE_ARCH=x64 ;;
+    aarch64|arm64) NODE_ARCH=arm64 ;;
+    *) echo "!! Node is missing and this CPU ($(uname -m)) has no prebuilt binary."; exit 1 ;;
+  esac
+  NODE_VER=v20.18.1
+  echo "Node not found here - installing ${NODE_VER} into ${NODE_HOME} (no sudo needed)..."
+  for tool in curl tar; do
+    command -v "$tool" >/dev/null 2>&1 || {
+      echo "!! Need '$tool' to install Node automatically. Install it, then run again."
+      exit 1
+    }
+  done
+  mkdir -p "$NODE_HOME"
+  if ! curl -fsSL "https://nodejs.org/dist/${NODE_VER}/node-${NODE_VER}-linux-${NODE_ARCH}.tar.xz" \
+       | tar -xJ -C "$NODE_HOME" --strip-components=1; then
+    echo "!! Could not download or unpack Node (check network, and that tar supports .xz)."
+    exit 1
   fi
-  exit 1
-}
+  command -v node >/dev/null 2>&1 || { echo "!! Node still not runnable after install."; exit 1; }
+  echo "Node $(node --version) ready."
+fi
 
 # Danh tính + cổng + secret: tính ở MỘT chỗ (brain-env.js) để launcher, cli.js và compose
 # không bao giờ lệch nhau. File .env của brain nằm NGOÀI repo — xem BRAIN_ENV_FILE.

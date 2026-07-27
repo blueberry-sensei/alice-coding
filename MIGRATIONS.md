@@ -6,6 +6,14 @@ Quy ước version: **semver**. MAJOR đổi = có breaking change bắt buộc 
 
 ---
 
+## 2.3.4 — WSL không còn tự tắt sau vài phút
+
+**Không breaking.** `npm run update` rồi `npm run brain`.
+
+- Tiến trình nền đặt *bên trong* distro không đủ: WSL2 vẫn tắt VM khi không còn phiên
+  `wsl.exe` nào từ Windows → brain chạy được một lúc rồi chết.
+- `npm run brain` nay giữ một tiến trình `wsl.exe` nền từ phía Windows. Đóng terminal vẫn OK.
+
 ## 2.3.3 — WSL in luôn URL theo IP distro
 
 **Không breaking.** `npm run update` rồi `npm run brain`.

@@ -6,6 +6,17 @@ Quy ước version: **semver**. MAJOR đổi = có breaking change bắt buộc 
 
 ---
 
+## 2.3.1 — Launcher tự cài Node trong WSL; bỏ trang checklist
+
+**Không breaking.** Nâng cấp bằng `npm run update` rồi `npm run brain`.
+
+- **WSL không phải cài Node tay nữa.** `npm run brain` tự tải Node vào `$HOME/.local/alice-node`
+  trong distro (không cần `sudo`). Node cài bên Windows không dùng được vì Docker và launcher
+  đều chạy trong distro.
+- **Bỏ trang checklist** (`localhost:8090`): app đã tự hướng dẫn, một service nữa chỉ tốn cổng.
+- Toàn bộ log của script chuyển sang tiếng Anh.
+- `npm run uninstall -- --yes` nay dọn cả image mồ côi và build cache (thêm `--keep-cache` để giữ).
+
 ## 2.3.0 — Mỗi project một brain · kéo image thay vì clone source · secret ra khỏi repo
 
 **Breaking với cách dựng brain.** Tri thức của bạn **không** ảnh hưởng.

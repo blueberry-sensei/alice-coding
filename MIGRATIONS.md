@@ -6,6 +6,15 @@ Quy ước version: **semver**. MAJOR đổi = có breaking change bắt buộc 
 
 ---
 
+## 2.3.7 — Dọn hai dòng nhiễu trên WSL
+
+**Không breaking.**
+
+- Bỏ dòng "a background process keeps the distro alive": tiến trình canh đã được thay bằng
+  `vmIdleTimeout=-1`, để lại chỉ khiến người đọc tưởng còn cơ chế đó.
+- `npm run brain` không còn báo "Node chưa có trong WSL" khi Node đã được cài: shell
+  không-login của `wsl -e` không có `$HOME/.local/alice-node/bin` trong PATH, nay dò qua đúng PATH.
+
 ## 2.3.6 — WSL không tự tắt VM nữa
 
 **Không breaking**, nhưng cần chạy `wsl --shutdown` MỘT lần.

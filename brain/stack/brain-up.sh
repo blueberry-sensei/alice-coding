@@ -142,18 +142,10 @@ echo "==> ALICE app: http://localhost:${WEB_PORT}"
 echo "==> API + engine log: $BRAIN_LOGS/sag-api.log"
 echo "==> Brain config (OUTSIDE the repo, holds a secret - never commit): $BRAIN_ENV_FILE"
 
-# WSL: VM tự tắt khi phiên launcher cuối cùng kết thúc → brain tắt theo. Bản cũ giữ VM sống
-# bằng cách CHẶN terminal ở `logs -f`, nên đóng cửa sổ là mất brain và không làm được việc khác.
-# Nay để lại một tiến trình nền trong distro: VM sống, terminal trả về ngay.
+# WSL: VM từng tự tắt kéo theo Docker + brain. Nay xử lý bằng `vmIdleTimeout=-1` trong
+# %USERPROFILE%\.wslconfig (cli.js ghi) — cơ chế chính thức, không cần tiến trình canh.
 if grep -qiE "microsoft|wsl" /proc/version 2>/dev/null; then
-  if ! pgrep -f "alice-brain-keepalive" >/dev/null 2>&1; then
-    setsid nohup bash -c 'exec -a alice-brain-keepalive sleep infinity' >/dev/null 2>&1 < /dev/null &
-    disown 2>/dev/null || true
-  fi
-  echo "==> WSL: a background process keeps the distro alive. Closing this terminal is fine."
-  echo "    Stop it for good: npm run brain:down"
-  # localhost-forwarding của WSL2 không phải lúc nào cũng bật. In luôn URL theo IP của distro
-  # để có đường chắc chắn mở được từ Windows, khỏi phải đi dò.
+  # localhost-forwarding của WSL2 không phải máy nào cũng chạy. In sẵn URL theo IP distro.
   WSL_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
   if [ -n "$WSL_IP" ]; then
     echo "    localhost not reachable from Windows? Use: http://${WSL_IP}:${WEB_PORT}"

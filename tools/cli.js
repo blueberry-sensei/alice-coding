@@ -384,7 +384,12 @@ function up() {
     // KHÔNG dùng được ở đây; đó là lý do phải dò riêng thay vì để script tự chết.
     // Không chặn ở đây: `brain-up.sh` tự cài Node vào $HOME của distro khi thiếu. Chỉ báo
     // trước để người dùng biết vì sao lần chạy đầu lâu hơn.
-    if (!tryRun("wsl", ["-e", "node", "--version"]).ok) {
+    // Node do launcher cài nằm ở $HOME/.local/alice-node/bin — shell không-login của
+    // `wsl -e` không có nó trong PATH, nên phải hỏi qua đúng PATH đó, kẻo lần nào cũng báo
+    // "chưa có" dù đã cài.
+    const nodeProbe = tryRun("wsl", ["-e", "bash", "-c",
+      'PATH="$HOME/.local/alice-node/bin:$PATH" node --version']);
+    if (!nodeProbe.ok) {
       console.log(C.y("Node chưa có trong WSL — launcher sẽ tự cài (không cần sudo)."));
     }
     console.log(C.d("→ brain-up.sh inside WSL (Docker CE)"));

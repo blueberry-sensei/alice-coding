@@ -6,6 +6,14 @@ Quy ước version: **semver**. MAJOR đổi = có breaking change bắt buộc 
 
 ---
 
+## 2.3.5 — WSL thật sự bind 0.0.0.0
+
+**Không breaking.** `npm run update` rồi `npm run brain`.
+
+- 2.3.2 thêm nhánh chọn `0.0.0.0` cho WSL nhưng `brain-env.js` vẫn luôn xuất
+  `BIND_ADDRESS=127.0.0.1`, nên nhánh đó **không bao giờ chạy** — container vẫn publish lên
+  loopback của distro. Nay `brain-env.js` để trống nếu người dùng không khai, launcher mới quyết.
+
 ## 2.3.4 — WSL không còn tự tắt sau vài phút
 
 **Không breaking.** `npm run update` rồi `npm run brain`.

@@ -92,7 +92,7 @@ function composeEnv() {
     ALICE_CORE_PATH: abs(map.ALICE_CORE_PATH, "alice-core"),
     BRAIN_LOGS: path.join(ROOT, "brain", ".logs", "api"),
     SAG_SECRET_KEY: map.SAG_SECRET_KEY || "",
-    BIND_ADDRESS: map.BIND_ADDRESS || "127.0.0.1",
+    BIND_ADDRESS: map.BIND_ADDRESS || (process.platform === "win32" ? "127.0.0.1" : ""),
     WEB_PORT: info.WEB_PORT,
     API_PORT: info.API_PORT,
     // compose.dev.yaml nội suy ${BRAIN_ID} vào tag image. Thiếu biến này thì `down`/`uninstall`

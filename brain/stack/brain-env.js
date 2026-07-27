@@ -234,7 +234,10 @@ async function resolve({ root = ROOT } = {}) {
     BRAIN_MODE: values.ALICE_APP_PATH && values.ALICE_CORE_PATH ? "dev" : "image",
     WEB_PORT: values.WEB_PORT,
     API_PORT: values.API_PORT,
-    BIND_ADDRESS: values.BIND_ADDRESS || "127.0.0.1",
+    // KHÔNG đặt mặc định ở đây: launcher mới biết mình đang ở WSL hay không, và WSL cần
+    // 0.0.0.0 (127.0.0.1 là loopback của distro, Windows không với tới). Đặt sẵn "127.0.0.1"
+    // là nhánh chọn của launcher không bao giờ chạy.
+    BIND_ADDRESS: values.BIND_ADDRESS || "",
     SAG_SECRET_KEY: values.SAG_SECRET_KEY,
     ALICE_APP_PATH: values.ALICE_APP_PATH || "",
     ALICE_CORE_PATH: values.ALICE_CORE_PATH || "",

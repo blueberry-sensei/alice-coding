@@ -1,6 +1,6 @@
 {
   "name": "alice-coding",
-  "version": "2.3.4",
+  "version": "2.3.5",
   "private": true,
   "description": "Trí nhớ dài hạn + kỷ luật làm việc cho AI coding agent. npm chỉ là lớp vỏ tiện tay — lõi là Python + Docker.",
   "scripts": {

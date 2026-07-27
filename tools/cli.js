@@ -95,7 +95,6 @@ function composeEnv() {
     BIND_ADDRESS: map.BIND_ADDRESS || "127.0.0.1",
     WEB_PORT: info.WEB_PORT,
     API_PORT: info.API_PORT,
-    CHECKLIST_PORT: info.CHECKLIST_PORT,
     // compose.dev.yaml nội suy ${BRAIN_ID} vào tag image. Thiếu biến này thì `down`/`uninstall`
     // ở chế độ dev nhìn ra tag rỗng và KHÔNG xoá được image vừa build.
     BRAIN_ID: info.BRAIN_ID,
@@ -340,8 +339,18 @@ function up() {
                               "-File", path.join(STACK, "brain-up.ps1")]);
   }
   if (IS_WIN && d.kind === "wsl") {
-    console.log(C.d("→ brain-up.sh qua WSL (Docker CE trong WSL)"));
-    console.log(C.y("Keep this window OPEN - closing it shuts down WSL, and the brain with it."));
+    // Docker nằm TRONG distro, nên launcher chạy trong đó luôn — và mọi thứ nó cần
+    // (Node, đường dẫn) phải là của Linux, không phải của Windows. Node trên Windows
+    // KHÔNG dùng được ở đây; đó là lý do phải dò riêng thay vì để script tự chết.
+    const wslNode = tryRun("wsl", ["-e", "node", "--version"]);
+    if (!wslNode.ok) {
+      console.error(C.r("Node 18+ chưa có BÊN TRONG WSL."));
+      console.error(C.d("  Node trên Windows không dùng được: Docker và launcher đều chạy trong distro."));
+      console.error("  Mở terminal WSL rồi cài, ví dụ:");
+      console.error(C.b("    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt install -y nodejs"));
+      return 1;
+    }
+    console.log(C.d(`→ brain-up.sh inside WSL (Docker CE, node ${wslNode.out.trim()})`));
     return run("wsl", ["-e", "bash", "brain/stack/brain-up.sh"]);
   }
   console.log(C.d("→ brain-up.sh"));
@@ -370,9 +379,8 @@ async function status() {
   else console.log(C.r("  Docker not found."));
   console.log(C.b("\nServices:"));
   const probes = [
-    ["API      ", `http://localhost:${info.API_PORT}`, "/api/v1/system/ready"],
-    ["Web      ", `http://localhost:${info.WEB_PORT}`, ""],
-    ["Checklist", `http://localhost:${info.CHECKLIST_PORT}`, ""],
+    ["API", `http://localhost:${info.API_PORT}`, "/api/v1/system/ready"],
+    ["Web", `http://localhost:${info.WEB_PORT}`, ""],
   ];
   for (const [label, base, probe] of probes) {
     const res = await get(base + probe);
@@ -400,7 +408,7 @@ async function list() {
   for (const brain of brains) {
     const mark = brain.id === here ? C.g(" <- current project") : "";
     const state = running.has(brain.id) ? C.g("running") : C.d("stopped");
-    console.log(`  ${state}  ${brain.id.padEnd(34)} web ${brain.web} | api ${brain.api} | checklist ${brain.checklist}${mark}`);
+    console.log(`  ${state}  ${brain.id.padEnd(34)} web ${brain.web} | api ${brain.api}${mark}`);
   }
   console.log(C.d("\nEach brain is its own compose project: containers, network and volumes are all separate."));
   return 0;

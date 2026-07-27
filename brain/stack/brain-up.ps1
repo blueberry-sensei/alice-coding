@@ -66,7 +66,7 @@ if ($env:BIND_ADDRESS -ne "127.0.0.1") {
 Write-Host "BRAIN_ID     = $($env:BRAIN_ID)"
 Write-Host "Mode         = $($env:BRAIN_MODE)"
 Write-Host "BIND_ADDRESS = $($env:BIND_ADDRESS)"
-Write-Host "Ports        = web $($env:WEB_PORT) | api $($env:API_PORT) | checklist $($env:CHECKLIST_PORT)"
+Write-Host "Ports        = web $($env:WEB_PORT) | api $($env:API_PORT)"
 
 $dc = @("compose", "-p", $env:BRAIN_ID) + $ComposeFiles + @("--env-file", $env:BRAIN_ENV_FILE)
 
@@ -95,7 +95,6 @@ docker @dc exec -T embedding ollama pull bge-m3
 if ($LASTEXITCODE -ne 0) { Write-Host "!! Model pull failed. Run it manually: npm run brain:pull" }
 
 Write-Host ""
-Write-Host "==> Checklist: http://localhost:$($env:CHECKLIST_PORT)"
 Write-Host "==> ALICE app: http://localhost:$($env:WEB_PORT)"
 Write-Host "==> Stack build log: $(Join-Path $LogDir 'brain-up.log')"
 Write-Host "==> API + engine log: $(Join-Path $env:BRAIN_LOGS 'sag-api.log')"

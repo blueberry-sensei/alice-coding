@@ -119,7 +119,7 @@ Dense RAG chấm điểm chunk theo độ giống vector → hay sót đúng th�
 | LLM (extract/rerank) | Cấu hình trong app — **AIStudio/Gemini free**, OpenRouter, hoặc local |
 | Lưu trữ | SQLite + LanceDB (bind-mount, gitignore) |
 | Giao tiếp agent | **MCP** (Streamable HTTP) + REST |
-| Orchestration | **Docker Compose** (ALICE api+web + embedding + checklist) |
+| Orchestration | **Docker Compose** (ALICE api+web + embedding) |
 | Tooling | **Python, chỉ thư viện chuẩn** — `tools/verify.py`, `tools/update.py`, `brain/sync/sync.py` |
 
 ---
@@ -235,7 +235,7 @@ Xong, nó in ra đúng địa chỉ kèm cổng đã cấp.
 > của WSL (`~/…`) thay vì `/mnt/d/…` cho nhanh.
 
 ### Bước 3 — Cấu hình LLM ngay trên app
-Mở **http://localhost:8090** — trang checklist hướng dẫn từng bước. Tóm tắt:
+Mở địa chỉ mà launcher vừa in ra (mặc định **http://localhost:3000**):
 1. Mở **http://localhost:3000** → nhập tên tạo danh tính (vd `Alice`).
 2. **Settings → Models** → thêm provider: key **AIStudio/Gemini** (hoặc OpenRouter). ✅ *Embedding `bge-m3` đã chạy sẵn.*
 3. Tạo 1 source thử + thêm text + search → xác nhận embedding & LLM chạy.
@@ -325,7 +325,7 @@ ALICE CODING/  (clone vào ./knowledge của project)
 ├── brain/                 ← 🧠 Bộ não
 │   ├── README · SETUP · RETRIEVAL · SYNC · KNOWLEDGE
 │   ├── sync/sync.py       ← file→não, chống trùng, gate verify, --rebuild
-│   └── stack/             ← Docker 1-lệnh: compose + launcher + checklist
+│   └── stack/             ← Docker 1-lệnh: compose + launcher
 ├── wiki/     README(T) · ROUTER.md(I) · <module>.md(I)
 ├── mistakes/ README(T) · LOG.md(I)     ← ID M-XXXX + trạng thái
 ├── decisions/README(T) · LOG.md(I)     ← ID D-XXXX — ý muốn của Bệ hạ

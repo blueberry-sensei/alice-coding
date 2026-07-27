@@ -1,6 +1,6 @@
 # brain/stack — Khởi động "não" bằng 1 lệnh
 
-Stack Docker gói sẵn: **ALICE** (api + web) + **embedding `bge-m3` local** (bundled) + **trang checklist**. Mục tiêu: pull ALICE CODING về, chạy 1 lệnh, rồi cấu hình LLM ngay trên app.
+Stack Docker gói sẵn: **ALICE** (api + web) + **embedding `bge-m3` local** (bundled). Mục tiêu: pull ALICE CODING về, chạy 1 lệnh, rồi cấu hình LLM ngay trên app.
 
 ## Chạy
 ```bash
@@ -10,7 +10,7 @@ Launcher tự chọn script đúng môi trường. Chạy **một lần là xong
 
 Không cần `git`, không cần source, không phải build gì. Chỉ cần Docker và Node.
 
-> Cổng **không cố định**. Project đầu tiên trên máy thường vẫn được 3000/8000/8090; project sau tự né sang cổng trống. Lấy cổng thật bằng `npm run brain:status`, xem toàn máy bằng `npm run brain:list`.
+> Cổng **không cố định**. Project đầu tiên trên máy thường vẫn được 3000/8000; project sau tự né sang cổng trống. Lấy cổng thật bằng `npm run brain:status`, xem toàn máy bằng `npm run brain:list`.
 
 ### Mỗi project một brain
 
@@ -65,7 +65,6 @@ npm run brain:down       # tắt (giữ data)
 | `web` | App ALICE (Settings → Models để thêm provider LLM) | `3000` |
 | `api` | Backend + MCP (`/mcp/`) + REST | `8000` |
 | `embedding` | `bge-m3` local (Ollama, OpenAI-compatible) | nội bộ `11434` |
-| `checklist` | Trang hướng dẫn từng bước | `8090` |
 
 ## Dữ liệu & vòng đời
 - Toàn bộ "não" (SQLite + LanceDB + upload) nằm trong **named volume** `<BRAIN_ID>_sagdata`, model Ollama ở `<BRAIN_ID>_ollama`. Không còn file dữ liệu nào trong cây repo → không thể lỡ tay commit, và copy thư mục project đi nơi khác không kéo theo "não".
@@ -104,16 +103,20 @@ Stack gồm **toàn container Linux** nên **giống hệt** trên cả hai máy
 
 ## Mở được từ trình duyệt Windows khi Docker CE chạy trong WSL
 
-**Nguyên nhân thật (đã xác minh, KHÔNG phải firewall):** `localhost` từ Windows tới WSL chạy bình thường (`curl.exe http://localhost:8090` → 200). Vấn đề duy nhất: **WSL VM tự tắt khi không còn phiên nào mở** → docker + brain tắt theo → lúc đó mở localhost mới lỗi.
+**Nguyên nhân thật (đã xác minh, KHÔNG phải firewall):** `localhost` từ Windows tới WSL chạy
+bình thường. Vấn đề duy nhất: **WSL VM tự tắt khi không còn phiên nào mở** → docker + brain tắt
+theo → lúc đó mở localhost mới lỗi.
 
-**→ Launcher đã tự xử lý.** `npm run brain` để lại một tiến trình nền (`alice-brain-keepalive`)
+**Launcher đã tự xử lý:** `npm run brain` để lại một tiến trình nền (`alice-brain-keepalive`)
 trong distro nên VM sống tiếp và **terminal được trả về ngay** — không phải giữ cửa sổ nào mở.
 Tắt hẳn: `npm run brain:down`.
 
+> ⚠️ **Node phải cài BÊN TRONG WSL.** Docker nằm trong distro nên launcher cũng chạy ở đó;
+> Node cài trên Windows không dùng được. Cài trong WSL:
+> `curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt install -y nodejs`
+
 Muốn bền hơn nữa thì cho Docker CE chạy qua **systemd**: `/etc/wsl.conf` thêm `[boot]` +
 `systemd=true`, rồi `sudo systemctl enable --now docker`.
-
-*(`enable-wsl-localhost.ps1` / mirrored networking chỉ cần khi máy thật sự chặn localhost-forwarding — hiếm, đa số KHÔNG cần.)*
 
 ## Ghi chú
 - Nếu vấp, xem `sag-api.log` (bảng Log ở trên) rồi tới `npm run brain:logs`; đổi embedding server (vd TEI/Infinity) chỉ là đổi service `embedding` + `SAG_EMBEDDING_BASE_URL`.

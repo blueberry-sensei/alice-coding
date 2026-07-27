@@ -57,7 +57,6 @@ TEMPLATE_GLOBS = [
     # Thiếu nó thì người nâng cấp nhận launcher mới mà không có file nó gọi → brain không dựng được.
     "brain/stack/*.yaml", "brain/stack/*.sh", "brain/stack/*.ps1", "brain/stack/*.md",
     "brain/stack/*.js", "brain/stack/.env.example",
-    "brain/stack/checklist/*",
     "wiki/README.md", "wiki/_TEMPLATE.md",
     "mistakes/README.md", "mistakes/_TEMPLATE.md",
     "decisions/README.md", "decisions/_TEMPLATE.md",

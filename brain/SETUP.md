@@ -1,6 +1,6 @@
 # brain / SETUP — Dựng "não" (1 lệnh) + cấu hình trong app
 
-Luồng đơn giản: **pull → 1 lệnh → mở checklist → thêm provider LLM trong app → chạy INITIALIZATION từ Claude/Codex desktop**. Embedding `bge-m3` đã **bundled local** trong stack — không phải set tay.
+Luồng đơn giản: **pull → 1 lệnh → thêm provider LLM trong app → chạy INITIALIZATION từ Claude/Codex desktop**. Embedding `bge-m3` đã **bundled local** trong stack — không phải set tay.
 
 ## Yêu cầu
 - **Docker** (Docker Desktop, hoặc Docker CE trong WSL) đang chạy.
@@ -19,8 +19,8 @@ Chạy **một lần là xong**: launcher tự chọn script đúng môi trườ
 
 Vận hành/log/dừng: [stack/README.md](stack/README.md).
 
-## Bước 2 — Làm theo checklist trên app
-Mở **http://localhost:8090** (trang checklist) và tick từng bước. Tóm tắt:
+## Bước 2 — Cấu hình LLM trên app
+Mở địa chỉ launcher in ra (mặc định `http://localhost:3000`) rồi làm ba việc:
 1. **http://localhost:3000** → nhập tên tạo identity (vd `Alice`).
 2. **Settings → Models** → thêm provider LLM. Đề xuất **AIStudio/Gemini free** ([lấy key](https://aistudio.google.com/apikey)) hoặc OpenRouter free. *Embedding không cần set — đã bundled `bge-m3`.*
 3. Tạo source thử + ingest 1 đoạn text + search → xác nhận embedding & LLM chạy.

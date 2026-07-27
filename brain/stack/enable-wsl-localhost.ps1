@@ -28,4 +28,4 @@ wsl --shutdown
 Write-Host ""
 Write-Host "XONG. Buoc tiep:" -ForegroundColor Green
 Write-Host "  1) bash knowledge/brain/stack/brain-up.sh"
-Write-Host "  2) Mo: http://localhost:3000  va  http://localhost:8090"
+Write-Host "  2) Mo dia chi ma `npm run brain` in ra (mac dinh http://localhost:3000)"

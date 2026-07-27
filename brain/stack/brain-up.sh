@@ -27,7 +27,15 @@ else
   LOG_FILE=""
 fi
 
-command -v node >/dev/null 2>&1 || { echo "!! Node 18+ required (brain-env.js resolves the brain identity)."; exit 1; }
+command -v node >/dev/null 2>&1 || {
+  echo "!! Node 18+ is required HERE, in the environment this script runs in."
+  if grep -qiE "microsoft|wsl" /proc/version 2>/dev/null; then
+    echo "   You are inside WSL. Node installed on Windows does NOT count - Docker and this"
+    echo "   launcher both run inside the distro. Install it here, for example:"
+    echo "     curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt install -y nodejs"
+  fi
+  exit 1
+}
 
 # Danh tính + cổng + secret: tính ở MỘT chỗ (brain-env.js) để launcher, cli.js và compose
 # không bao giờ lệch nhau. File .env của brain nằm NGOÀI repo — xem BRAIN_ENV_FILE.
@@ -65,7 +73,7 @@ fi
 echo "BRAIN_ID     = $BRAIN_ID"
 echo "Mode         = $BRAIN_MODE"
 echo "BIND_ADDRESS = $BIND_ADDRESS"
-echo "Ports        = web $WEB_PORT | api $API_PORT | checklist $CHECKLIST_PORT"
+echo "Ports        = web $WEB_PORT | api $API_PORT"
 
 dc() { docker compose -p "$BRAIN_ID" "${COMPOSE_FILES[@]}" --env-file "$BRAIN_ENV_FILE" "$@"; }
 
@@ -87,7 +95,6 @@ dc exec -T embedding ollama pull bge-m3 \
   || echo "!! Model pull failed. Run it manually: npm run brain:pull"
 
 echo ""
-echo "==> Checklist: http://localhost:${CHECKLIST_PORT}"
 echo "==> ALICE app: http://localhost:${WEB_PORT}"
 [ -n "$LOG_FILE" ] && echo "==> Stack build log: $LOG_FILE"
 echo "==> API + engine log: $BRAIN_LOGS/sag-api.log"

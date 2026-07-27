@@ -1,5 +1,5 @@
 # ALICE CODING — brain stack (self-contained).
-# ALICE api+web (fork riêng) + embedding bge-m3 (bundled, local) + trang checklist.
+# ALICE api+web (fork riêng) + embedding bge-m3 (bundled, local).
 #
 # MỖI PROJECT MỘT BRAIN. Tên compose project (`-p <BRAIN_ID>`) do launcher suy ra từ đường dẫn
 # tuyệt đối của kho tri thức, nên hai project khác nhau không bao giờ đụng container hay port.
@@ -96,15 +96,6 @@ services:
         condition: service_healthy
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-3000}:3000"
-    restart: unless-stopped
-
-  # ── Trang checklist (tĩnh) ──
-  checklist:
-    image: nginx:alpine
-    volumes:
-      - ./checklist:/usr/share/nginx/html:ro
-    ports:
-      - "${BIND_ADDRESS:-127.0.0.1}:${CHECKLIST_PORT:-8090}:80"
     restart: unless-stopped
 
 volumes:

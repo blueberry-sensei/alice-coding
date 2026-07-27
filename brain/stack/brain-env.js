@@ -133,7 +133,7 @@ function reservedByOtherBrains(selfId) {
     if (!entry.isDirectory() || entry.name === selfId) continue;
     const values = readEnvFile(path.join(stateRoot(), entry.name, ".env"));
     if (!values) continue;
-    for (const key of ["WEB_PORT", "API_PORT", "CHECKLIST_PORT"]) {
+    for (const key of ["WEB_PORT", "API_PORT"]) {
       const port = Number(values[key]);
       if (Number.isInteger(port)) reserved.add(port);
     }
@@ -193,7 +193,7 @@ async function resolve({ root = ROOT } = {}) {
 
   const reserved = reservedByOtherBrains(id);
   const taken = new Set();
-  const wanted = { WEB_PORT: 3000, API_PORT: 8000, CHECKLIST_PORT: 8090 };
+  const wanted = { WEB_PORT: 3000, API_PORT: 8000 };
   for (const [key, preferred] of Object.entries(wanted)) {
     const existing = Number(values[key]);
     if (Number.isInteger(existing) && existing > 0 && !reserved.has(existing)) {
@@ -234,7 +234,6 @@ async function resolve({ root = ROOT } = {}) {
     BRAIN_MODE: values.ALICE_APP_PATH && values.ALICE_CORE_PATH ? "dev" : "image",
     WEB_PORT: values.WEB_PORT,
     API_PORT: values.API_PORT,
-    CHECKLIST_PORT: values.CHECKLIST_PORT,
     BIND_ADDRESS: values.BIND_ADDRESS || "127.0.0.1",
     SAG_SECRET_KEY: values.SAG_SECRET_KEY,
     ALICE_APP_PATH: values.ALICE_APP_PATH || "",
@@ -254,7 +253,6 @@ function peek({ root = ROOT } = {}) {
     exists: fs.existsSync(envFile),
     WEB_PORT: values.WEB_PORT || "3000",
     API_PORT: values.API_PORT || "8000",
-    CHECKLIST_PORT: values.CHECKLIST_PORT || "8090",
     BRAIN_MODE: values.ALICE_APP_PATH && values.ALICE_CORE_PATH ? "dev" : "image",
     ALICE_APP_PATH: values.ALICE_APP_PATH || "",
     ALICE_CORE_PATH: values.ALICE_CORE_PATH || "",
@@ -290,7 +288,6 @@ function listBrains() {
         id: entry.name,
         web: values.WEB_PORT || "?",
         api: values.API_PORT || "?",
-        checklist: values.CHECKLIST_PORT || "?",
       };
     })
     .sort((a, b) => a.id.localeCompare(b.id));

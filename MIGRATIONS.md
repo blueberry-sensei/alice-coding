@@ -35,6 +35,9 @@ Ba vấn đề của bản cũ, cùng một gốc: stack bị ghim cứng vào *
 - `BIND_ADDRESS` luôn `127.0.0.1` (bản cũ tự mở `0.0.0.0` trên WSL — brain nói HTTP trần nên đó là đường để API key đi qua LAN ở dạng đọc được).
 - Trên WSL, launcher không còn chiếm terminal; brain chạy nền, tắt bằng `npm run brain:down`.
 - Lệnh mới: `npm run brain:list` (mọi brain trên máy), `npm run brain:pull` (kéo lại model embedding).
+- **Bỏ trang checklist** (`localhost:8090`): app đã tự hướng dẫn, một service nữa chỉ tốn cổng.
+- **WSL: Node phải cài BÊN TRONG distro.** Docker nằm ở đó nên launcher chạy ở đó; Node trên
+  Windows không dùng được. `npm run brain` nay dò trước và in lệnh cài thay vì chết giữa chừng.
 - `npm run uninstall -- --yes` nay dọn cả **image mồ côi** và **build cache** (bản cũ để lại vài
   chục GB sau khi "gỡ"). Có project Docker khác trên máy thì thêm `--keep-cache`.
 

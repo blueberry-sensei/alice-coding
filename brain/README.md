@@ -4,7 +4,7 @@ Lớp **trí nhớ dài hạn + retrieval** cho Alice, dựng trên engine [**AL
 
 > **Mặc định BẬT.** Nếu chưa dựng được hạ tầng (Docker/model), Alice **fallback** đọc file trụ cột đầy đủ — không bao giờ kẹt. Xem [RETRIEVAL.md](RETRIEVAL.md) mục Fallback.
 
-**Bắt đầu nhanh:** **1 lệnh** dựng cả stack (ALICE api+web + embedding `bge-m3` bundled + trang checklist) → cấu hình **LLM trong app** → chạy INITIALIZATION từ Claude/Codex desktop. Xem [SETUP.md](SETUP.md) + [stack/README.md](stack/README.md); checklist mở tại `http://localhost:8090`.
+**Bắt đầu nhanh:** **1 lệnh** dựng cả stack (ALICE api+web + embedding `bge-m3` bundled) → cấu hình **LLM trong app** → chạy INITIALIZATION từ Claude/Codex desktop. Xem [SETUP.md](SETUP.md) + [stack/README.md](stack/README.md).
 
 ## Nguyên tắc: index dẫn xuất
 - **File `knowledge/` là source-of-truth.** Não chỉ là **index dẫn xuất** để tăng recall. Mọi khẳng định vẫn phải đối chiếu source thật (`path:line#anchor`).
@@ -45,7 +45,7 @@ Enforce bằng **rules (ALICE.md) + vibe base-prompt + brain-qua-MCP + forcing f
 | File | Nội dung |
 |---|---|
 | [SETUP.md](SETUP.md) | Luồng 1-lệnh: dựng stack + set LLM trong app + mount MCP + chạy INITIALIZATION |
-| [stack/](stack/README.md) | Docker stack 1-lệnh (ALICE api+web + embedding `bge-m3` bundled + trang checklist) + launcher |
+| [stack/](stack/README.md) | Docker stack 1-lệnh (ALICE api+web + embedding `bge-m3` bundled) + launcher |
 | [RETRIEVAL.md](RETRIEVAL.md) | Giao thức query não (funnel + `get_entity` + citation + fallback + proof-of-load) |
 | [SYNC.md](SYNC.md) | Đồng bộ file→não (chống trùng) + `--rebuild` |
 | [KNOWLEDGE.md](KNOWLEDGE.md) | Routine `/knowledge` — tự cải thiện tri thức |

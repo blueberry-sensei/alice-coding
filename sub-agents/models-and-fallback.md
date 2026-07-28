@@ -40,6 +40,10 @@ Có hai execution mode, không được trộn:
 Mode này hợp phân tích, review diff, tìm edge case, đề xuất test. Nó **không có filesystem, shell,
 MCP brain hay quyền sửa code**. Nếu main agent không truyền context thì sub-agent không biết project.
 
+Policy instance cũ nói registry chỉ là sổ lưu, hoặc bắt slot Brain phải smoke CLI, đã sai contract:
+đánh `SUPERSEDED` sau khi đối chiếu `list_sub_agents`. CLI smoke chỉ quyết định mode `host-cli`;
+không được dùng nó để loại slot `callable=yes` khỏi mode `brain`.
+
 ### `host-cli` — coding agent có filesystem
 
 1. CLI phải được cài, đăng nhập bằng auth riêng và smoke thật.

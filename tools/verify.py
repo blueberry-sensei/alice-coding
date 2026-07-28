@@ -15,6 +15,7 @@ Kiểm:
   C6 supersede — mọi đích SUPERSEDED -> ID có thật
   C7 phình     — cảnh báo prune khi LOG vượt ngưỡng đọc-hết-được
   C8 phủ sóng  — (tuỳ chọn) thư mục module trong code chưa có trang wiki
+  C9 sub-agent — policy instance cũ không được nhập Brain mode với host CLI
 
 Exit code: 0 = không có ERROR (WARN/INFO vẫn 0) · 1 = có ERROR · 2 = sai tham số.
 Chỉ dùng thư viện chuẩn. Chạy: python tools/verify.py [--fix] [--strict] [--json]
@@ -62,6 +63,11 @@ SUPERSEDED_RE = re.compile(r"^SUPERSEDED\s*(?:→|->)\s*([MD]-\d{4})$")
 
 MISTAKE_FIELDS = ["Lỗi gì", "Bối cảnh", "Đã làm gì sai", "Root cause", "Bài học", "Phòng lần sau"]
 DECISION_FIELDS = ["Loại", "Luật", "Vì sao", "Áp dụng khi", "Nguồn"]
+STALE_SUB_AGENT_POLICY_MARKERS = (
+    "registry là **sổ đăng ký**",
+    "brain **không** chạy sub-agent hộ",
+    "smoke chạy được bằng cli thật trên host",
+)
 
 FENCE_RE = re.compile(r"^\s*(```|~~~)")
 COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
@@ -259,14 +265,17 @@ def parse_entries(path, prefix):
         m = ENTRY_RE.match(line)
         if m:
             if cur:
+                cur["text"] = "\n".join(cur.pop("lines"))
                 entries.append(cur)
             cur = {"id": m.group(1), "date": m.group(2), "title": m.group(3),
-                   "tag": m.group(4), "line": i, "status": None, "fields": set()}
+                   "tag": m.group(4), "line": i, "status": None, "fields": set(),
+                   "lines": [line]}
             continue
         if line.startswith("## ") and cur is None:
             continue
         if cur is None:
             continue
+        cur["lines"].append(line)
         ms = STATUS_RE.match(line)
         if ms:
             cur["status"] = ms.group(1)
@@ -274,6 +283,7 @@ def parse_entries(path, prefix):
         if mf:
             cur["fields"].add(mf.group(1))
     if cur:
+        cur["text"] = "\n".join(cur.pop("lines"))
         entries.append(cur)
     return entries
 
@@ -377,6 +387,34 @@ def check_bloat(rep, cfg, mistakes, decisions, n_digests):
                  "SUPERSEDED" % len(stale), "decisions/LOG.md")
 
 
+def check_sub_agent_policy(rep, decisions):
+    """Chặn policy trước 2.4.7 đang lấy trạng thái CLI để phủ định Brain mode."""
+    for entry in decisions:
+        if entry["status"] != "ACTIVE":
+            continue
+        body = entry.get("text", "").lower()
+        if any(marker in body for marker in STALE_SUB_AGENT_POLICY_MARKERS):
+            rep.error(
+                "C9",
+                "%s conflates Brain mode with host-cli. Mark it SUPERSEDED: Brain mode uses "
+                "`list_sub_agents`/`ask_sub_agent`; CLI smoke applies only to host-cli"
+                % entry["id"],
+                "decisions/LOG.md",
+                entry["line"],
+            )
+
+    project = ROOT / "ALICE.project.md"
+    if project.exists():
+        body = strip_noise(read(project)).lower()
+        if any(marker in body for marker in STALE_SUB_AGENT_POLICY_MARKERS):
+            rep.error(
+                "C9",
+                "ALICE.project.md still says Brain cannot execute registered sub-agents. "
+                "Update the policy: `callable=yes` governs Brain mode; host CLI has separate auth",
+                "ALICE.project.md",
+            )
+
+
 # --------------------------------------------------------------- C8 phủ sóng
 def check_coverage(rep, cfg):
     dirs = [d.strip() for d in cfg["CODE_MODULE_DIRS"].split(",") if d.strip()]
@@ -454,6 +492,7 @@ def main():
     check_supersede(rep, mistakes + decisions)
     n_digests = check_context(rep)
     check_bloat(rep, cfg, mistakes, decisions, n_digests)
+    check_sub_agent_policy(rep, decisions)
     check_coverage(rep, cfg)
 
     emit(rep, args.json, fixed)

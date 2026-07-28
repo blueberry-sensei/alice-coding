@@ -182,7 +182,31 @@ def m_2_0_0(root, dry):
     return notes
 
 
-MIGRATIONS = [("2.0.0", m_2_0_0)]
+def m_2_4_8(root, dry):
+    """2.4.8: cảnh báo policy instance cũ đang nhập Brain mode với host CLI."""
+    del dry
+    stale = []
+    markers = (
+        "registry là **sổ đăng ký**",
+        "brain **không** chạy sub-agent hộ",
+        "smoke chạy được bằng cli thật trên host",
+    )
+    for rel in ("ALICE.project.md", "decisions/LOG.md"):
+        path = root / rel
+        if path.exists():
+            content = path.read_text(encoding="utf-8", errors="replace").lower()
+            if any(marker in content for marker in markers):
+                stale.append(rel)
+    if not stale:
+        return []
+    return [
+        "review %s and mark stale sub-agent rules SUPERSEDED: Brain mode uses "
+        "list_sub_agents/ask_sub_agent; CLI smoke applies only to host-cli mode"
+        % ", ".join(stale)
+    ]
+
+
+MIGRATIONS = [("2.0.0", m_2_0_0), ("2.4.8", m_2_4_8)]
 
 
 def run_migrations(root, old, new, dry):

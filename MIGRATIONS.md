@@ -6,6 +6,21 @@ Quy ước version: **semver**. MAJOR đổi = có breaking change bắt buộc 
 
 ---
 
+## 2.4.8 — Telemetry thấy lần ghi tri thức
+
+**Không breaking.** `npm run update` rồi `npm run brain`.
+
+Sau một lượt `npm run sync` có diff, Settings → Telemetry ghi **Knowledge write** với source,
+danh sách file tạo/cập nhật/xoá và tổng `+ / ~ / -`. Event chỉ xuất hiện sau khi ingest request
+thành công và `.sync-state.json` đã lưu; sửa Markdown trên host mà chưa sync không được tính là đã
+ghi vào Brain. Sync không có thay đổi thì không tạo event nhiễu.
+
+Khả năng chạy sub-agent nay tách tuyệt đối theo mode: Brain mode dùng `callable` từ
+`list_sub_agents`; chỉ host-CLI mode mới phụ thuộc CLI và auth trên host. Project nâng cấp từ policy
+cũ phải đánh `SUPERSEDED` mọi decision nói registry chỉ là sổ đăng ký hoặc bắt Brain slot smoke CLI.
+
+---
+
 ## 2.4.7 — Sub-agent chạy qua Brain, không cần chép lại key
 
 **Không breaking.** `npm run update` rồi `npm run brain`.

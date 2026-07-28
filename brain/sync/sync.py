@@ -285,6 +285,45 @@ def delete_doc(cfg, token, source_id, doc_id):
         print("  ! ignoring delete error for %s: %s" % (doc_id, e))
 
 
+def report_knowledge_sync(
+    cfg,
+    token,
+    source_id,
+    *,
+    created,
+    updated,
+    deleted,
+    skipped,
+    rebuild,
+):
+    """Ghi diff sau khi state đã lưu; telemetry lỗi không được làm ingest chạy lại."""
+    if not created and not updated and not deleted:
+        return
+    try:
+        result = http(
+            "POST",
+            cfg["SAG_API_BASE"] + "/telemetry/knowledge-sync",
+            token=token,
+            data={
+                "actor": os.environ.get("ALICE_AGENT_ACTOR", "alice-sync"),
+                "source_id": source_id,
+                "source_name": cfg["BRAIN_SOURCE_NAME"],
+                "created": created,
+                "updated": updated,
+                "deleted": deleted,
+                "skipped": skipped,
+                "rebuild": rebuild,
+            },
+        )
+        if result.get("recorded") is not True:
+            print("[brain-sync] WARNING: Brain accepted the sync but did not record telemetry.")
+    except SystemExit as error:
+        print(
+            "[brain-sync] WARNING: knowledge was synced, but telemetry was not recorded: %s"
+            % error
+        )
+
+
 def main():
     ap = argparse.ArgumentParser(description="Brain sync (SAG)")
     ap.add_argument("--config", default=str(BRAIN_DIR / "brain.config"))
@@ -313,7 +352,7 @@ def main():
             delete_doc(cfg, token, source_id, d.get("id"))
         state["files"] = {}
 
-    seen, created, updated, deleted, skipped = set(), 0, 0, 0, 0
+    seen, created, updated, deleted, skipped = set(), [], [], [], 0
     for p in files:
         r = rel(p)
         seen.add(r)
@@ -327,22 +366,32 @@ def main():
         doc_id = ingest(cfg, token, source_id, r, p.read_text(encoding="utf-8"))
         state["files"][r] = {"document_id": doc_id, "sha256": h}
         if entry:
-            updated += 1
+            updated.append(r)
             print("  ~ update %s" % r)
         else:
-            created += 1
+            created.append(r)
             print("  + ingest %s" % r)
 
     for r in list(state["files"]):                    # file đã xoá trên đĩa
         if r not in seen:
             delete_doc(cfg, token, source_id, state["files"][r].get("document_id"))
             del state["files"][r]
-            deleted += 1
+            deleted.append(r)
             print("  - delete %s" % r)
 
     save_state(cfg, state)
+    report_knowledge_sync(
+        cfg,
+        token,
+        source_id,
+        created=created,
+        updated=updated,
+        deleted=deleted,
+        skipped=skipped,
+        rebuild=args.rebuild,
+    )
     print("[brain-sync] done: +%d ~%d -%d (skipped %d). source=%s (%s)"
-          % (created, updated, deleted, skipped, cfg["BRAIN_SOURCE_NAME"], source_id))
+          % (len(created), len(updated), len(deleted), skipped, cfg["BRAIN_SOURCE_NAME"], source_id))
     print("[brain-sync] event/entity extraction runs in the background; wait for READY before searching.")
 
 

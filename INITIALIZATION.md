@@ -172,6 +172,10 @@ chứng registry rỗng.**
   chặn INITIALIZATION.
 - Smoke mỗi slot cần dùng bằng `ask_sub_agent` với một task ngắn. Credential được giải mã và dùng
   **bên trong Brain**; tool không trả key, không cần chép lại thành biến môi trường trên host.
+- Điều kiện chạy phải tách theo mode: `brain` tin `callable=yes` từ `list_sub_agents`;
+  `host-cli` mới cần CLI/auth trên host và smoke CLI. Nếu `ALICE.project.md` hay một decision cũ
+  nói registry chỉ là “sổ đăng ký”, hoặc bắt mọi slot phải smoke CLI, đó là contract trước 2.4.7:
+  đối chiếu runtime rồi đánh `SUPERSEDED`, không được dùng nó để vô hiệu hoá Brain mode.
 - Nếu muốn sub-agent **tự đọc/sửa file**, đó là đường CLI riêng: lúc ấy mới cần CLI có thật, auth
   riêng hợp lệ và smoke CLI. Ghi vào `ALICE.project.md` **provider + model + vai trò + execution
   mode (`brain` hoặc `host-cli`) + lệnh verify**, tuyệt đối không ghi credential.
@@ -318,10 +322,12 @@ Bạn là Alice, làm theo knowledge/ALICE.md + knowledge/ALICE.project.md trên
     đánh SUPERSEDED) → `npm run verify` (phải 0 ERROR) →
     `npm run sync`. Report theo ALICE mục 8 (có mục "tri thức đã ghi").
 
-[E] Giao việc cho sub-agent (nếu có): gọi `list_sub_agents`, đối chiếu policy ở
-    knowledge/ALICE.project.md mục 7. Phân tích/review → `ask_sub_agent` với code + tri thức
-    liên quan trong context; Brain tự ghi telemetry. Tự đọc/sửa file → host CLI qua
-    knowledge/sub-agents/base-prompt.md, rồi khai bằng `log_agent_task`.
+[E] Giao việc cho sub-agent (nếu có): gọi `list_sub_agents`; dùng vai trò/mode ở
+    knowledge/ALICE.project.md nhưng lấy khả năng chạy Brain từ `callable`, không từ CLI host.
+    Policy cũ nhập hai mode làm một thì đánh SUPERSEDED trước khi dùng. Phân tích/review →
+    `ask_sub_agent` với code + tri thức liên quan trong context; Brain tự ghi telemetry.
+    Tự đọc/sửa file → ghi `log_agent_task(status="started")` TRƯỚC khi mở host CLI qua
+    knowledge/sub-agents/base-prompt.md, rồi ghi `done|failed` ngay khi thu hồi kết quả.
 
 ## NHIỆM VỤ
 <Bệ hạ chỉ cần điền việc cần làm ở đây>

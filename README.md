@@ -9,7 +9,7 @@
 **Một sản phẩm của [Blueberry Sensei](https://github.com/blueberry-sensei).**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.7-6E56CF)](VERSION)
+[![Version](https://img.shields.io/badge/version-2.4.8-6E56CF)](VERSION)
 [![Engine](https://img.shields.io/badge/engine-ALICE%20CORE-6E56CF)](#alice-core-khác-rag-thường-ở-đâu)
 [![Embedding](https://img.shields.io/badge/embedding-bge--m3%20local-2EA043)](https://huggingface.co/BAAI/bge-m3)
 [![Runtime](https://img.shields.io/badge/runtime-Docker-2496ED?logo=docker&logoColor=white)](#4-cài-đặt)
@@ -202,6 +202,7 @@ auth riêng của CLI, sau đó orchestrator khai telemetry bằng `log_agent_ta
 - token vào/ra, độ trễ, thành công hay thất bại;
 - chi phí ước tính khi có bảng giá; chưa biết giá thì ghi **unknown**, không giả vờ bằng `0`;
 - agent nào đã tra tri thức, gọi tool gì và lấy những citation nào;
+- lần sync nào đã tạo/cập nhật/xoá file tri thức, kèm source và diff thực sự vào Brain;
 - lần nào agent đọc registry, gọi sub-agent qua Brain, hoặc khai một lượt CLI ngoài Brain.
 
 Telemetry được bắt tại lớp gọi model dùng chung, nên không chỉ thấy chat mà còn thấy đường

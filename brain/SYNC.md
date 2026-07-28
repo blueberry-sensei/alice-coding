@@ -2,6 +2,11 @@
 
 SAG **không có dedup/idempotency**: nếu ingest mù một file đã sửa, nó tạo **document + chunk TRÙNG**. `sync.py` giải việc này bằng cách tự giữ map `file → document_id + sha256`.
 
+Sau một lượt có thay đổi, sync tự ghi event **Knowledge write** vào Settings → Telemetry với source,
+danh sách file tạo/cập nhật/xoá và tổng `+ / ~ / -`. Event chỉ được gửi sau khi ingest request hoàn
+tất và `.sync-state.json` đã lưu; sửa Markdown trên host mà chưa sync thì chưa phải tri thức trong
+Brain. Lượt không có diff không tạo event.
+
 ## Gate: verify chạy TRƯỚC, hỏng thì không sync
 
 `sync.py` gọi [`tools/verify.py`](../tools/verify.py) trước mọi thứ và **dừng nếu còn ERROR**.

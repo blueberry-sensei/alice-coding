@@ -1,10 +1,11 @@
 # TELEMETRY.md — Tiền và tri thức đi đâu
 
-Brain tự ghi lại **mọi request LLM** (token vào/ra, chi phí, độ trễ, thành/bại) và **mọi lần
-agent lấy tri thức qua MCP**. Xem tại **Settings → Telemetry** trên UI của brain.
+Brain tự ghi lại **mọi request LLM** (token vào/ra, chi phí, độ trễ, thành/bại), **mọi lần
+agent lấy tri thức qua MCP** và **mọi diff được sync vào kho**. Xem tại
+**Settings → Telemetry** trên UI của brain.
 
 Mục đích: trả lời được ba câu mà trước đây chỉ đoán được —
-*tinh luyện tài liệu tốn bao nhiêu tiền*, *lúc vibe agent đã lấy những tri thức gì*,
+*tinh luyện tài liệu tốn bao nhiêu tiền*, *lúc vibe agent đã lấy/ghi những tri thức gì*,
 và *ai làm việc gì qua ALICE*.
 
 Dữ liệu nằm trong chính DB của brain, **không gửi đi đâu**. Bản ghi cũ hơn `SAG_TELEMETRY_RETENTION_DAYS`
@@ -49,6 +50,10 @@ Hai đường có bằng chứng khác nhau:
    thật, không phải dò CLI hay đoán API.
 2. `ask_sub_agent` tự ghi **delegation** + request LLM: provider/model, task, kết quả xem trước,
    token provider trả về, độ trễ và lỗi. Không gọi `log_agent_task` lần nữa.
+3. `npm run sync` chỉ ghi **Knowledge write** sau khi diff đã ingest và `.sync-state.json` đã lưu:
+   danh sách file tạo/cập nhật/xoá, source và tổng `+ / ~ / -`. Sync không đổi file nào thì không
+   tạo event nhiễu. Nếu ingest đã xong nhưng ghi telemetry lỗi, terminal phải in `WARNING`; không
+   được nói telemetry đã ghi thành công.
 
 Sub-agent chạy bằng CLI trên máy (opencode, codex, gemini…) **không đi qua Brain**, nên vẫn phải
 được orchestrator khai bằng:
@@ -75,6 +80,8 @@ Ai không cắm MCP thì dùng đường HTTP tương đương: `POST /api/v1/te
 | Có `Sub-agent registry` nhưng không có `delegation` | Agent đã đọc cấu hình nhưng chưa gọi `ask_sub_agent` hay chưa khai lượt CLI. |
 | `delegation` có kết quả xem trước | Lượt này đi qua `ask_sub_agent`; Brain đo được request thật. |
 | `delegation` chỉ có note verify | Lượt CLI ngoài Brain do orchestrator tự khai bằng `log_agent_task`. |
+| Agent nói đã dùng CLI nhưng không có `delegation` | Agent đã vi phạm protocol và không gọi `log_agent_task`; Brain không thể tự quan sát process tuỳ ý trên host. |
+| `Knowledge write` | Diff file đã thực sự được `sync` đưa vào Brain; badge không xuất hiện chỉ vì agent sửa Markdown trên host. |
 | Lời gọi thất bại dồn vào một model | Xem thêm Settings → Model → Call history để biết loại lỗi và nhà nào bị tắt. |
 
 ## 5. Ranh giới — nói thẳng để không tin nhầm

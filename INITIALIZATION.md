@@ -106,8 +106,10 @@ tròn lên, không được ghi "đã đọc toàn bộ" khi chỉ mới đọc 
 Mục tiêu: giúp Bệ hạ setup **đầy đủ nhất có thể**. Phải **dò hiện trạng trước**, rồi tư vấn, rồi (nếu Bệ hạ đồng ý) hướng dẫn từng bước và **test lại**.
 
 ### 2a. Dò sub-agents đang có
-- Kiểm CLI/agent đã cài (`opencode --version`, `gemini --version`, `codex --version`, `claude` extension).
-- Với opencode: `opencode auth list` + `opencode models` để biết provider/model thực có.
+- Chỉ kiểm CLI/agent đã cài (`opencode --version`, `gemini --version`, `codex --version`,
+  `claude` extension) để biết **khả năng sửa filesystem trên host**.
+- **Không** dùng kết quả CLI để suy ra registry của ALICE có/rỗng, và không đoán endpoint REST.
+  Nguồn sự thật registry chỉ được đọc sau khi brain chạy ở Bước 2e.
 - Đối chiếu **ngưỡng delegate** ở [`sub-agents/README.md`](sub-agents/README.md). Provider/model
   không lấy từ bảng tĩnh trong repo; sau khi brain chạy, chốt registry ở Bước 2e.
 - Nếu orchestrator là Claude Code: ghi rõ rằng sub-agent native **cùng hạng model → không rẻ hơn**, lợi ích là cô lập context. Đừng hứa tiết kiệm token nếu không có.
@@ -152,28 +154,32 @@ Xem [`brain/README.md`](brain/README.md) + [`brain/SETUP.md`](brain/SETUP.md).
 
 ### 2e. Chốt registry Sub Agents trên brain
 
-Nguồn sự thật là **Settings → Sub Agents** trên UI của brain vừa dựng:
+Nguồn sự thật là **Settings → Sub Agents** trên brain vừa dựng. Agent đọc bằng tool MCP
+`list_sub_agents`; UI là chỗ Bệ hạ cấu hình. **Cấm đoán đường dẫn API rồi lấy loạt 404 làm bằng
+chứng registry rỗng.**
 
 - Năm preset `Claude`, `Codex`, `OpenCode GO`, `OpenCode ZEN`, `Gemini CLI` **không có bảng model
   hard-code**. Phải nhập API key (hoặc dùng key đã lưu), bấm xác thực và lấy danh sách model trực
   tiếp từ provider; chỉ `Custom provider` được nhập model thủ công.
-- Registry độc lập với `sub-agents/mcp.md`. MCP không quyết định agent/model nào được dùng.
+- Registry độc lập với MCP capability của từng CLI, nhưng chính MCP brain cung cấp hai tool chuẩn:
+  `list_sub_agents` để đọc registry và `ask_sub_agent` để gọi model đã bật.
 - Credential mã hoá bằng secret của brain; API chỉ trả `credential_set`, không trả key. Slot preset
   chỉ được bật/lưu với model còn nằm trong danh sách live và có `model_verified=true`. **Không**
   chép credential vào file project, prompt, task spec, log hay report.
 - Nếu Bệ hạ **yêu cầu cấu hình sub-agent trong INITIALIZATION**, Alice mở tab này và cấu hình slot
   được yêu cầu. Chỉ hỏi phần credential còn thiếu; không hỏi lại provider/model đã được Bệ hạ chốt.
-- Nếu Bệ hạ không yêu cầu, chỉ đọc các slot đang bật và `model_verified=true`; registry rỗng không
+- Nếu Bệ hạ không yêu cầu, gọi `list_sub_agents`, chỉ lấy slot `callable=yes`; registry rỗng không
   chặn INITIALIZATION.
-- Registry không tự đăng nhập CLI trên host. Slot chỉ được ghi vào `ALICE.project.md` sau khi CLI
-  tương ứng có thật, auth hợp lệ và một smoke task chạy được. Ghi **provider + model + vai trò +
-  lệnh verify**, tuyệt đối không ghi credential.
+- Smoke mỗi slot cần dùng bằng `ask_sub_agent` với một task ngắn. Credential được giải mã và dùng
+  **bên trong Brain**; tool không trả key, không cần chép lại thành biến môi trường trên host.
+- Nếu muốn sub-agent **tự đọc/sửa file**, đó là đường CLI riêng: lúc ấy mới cần CLI có thật, auth
+  riêng hợp lệ và smoke CLI. Ghi vào `ALICE.project.md` **provider + model + vai trò + execution
+  mode (`brain` hoặc `host-cli`) + lệnh verify**, tuyệt đối không ghi credential.
 
-> **Registry này được dùng lúc VIBE như thế nào** (nói rõ vì hay bị hiểu nhầm): brain **không**
-> chạy sub-agent hộ và **không** rót credential vào CLI. Nó là **sổ đăng ký**: nơi Bệ hạ chốt
-> slot nào bật, model nào đã xác thực. INITIALIZATION đọc sổ đó rồi **bake** kết quả vào
-> `ALICE.project.md` mục 7. Khi vibe, orchestrator đọc mục 7 — **không** gọi API brain để hỏi
-> lại — rồi tự gọi CLI trên máy bằng auth của chính CLI đó. Chi tiết ở
+> **Ranh giới thật:** `ask_sub_agent` gọi model qua provider để phân tích/review và tự ghi
+> telemetry, nhưng model đó **không có filesystem hay MCP brain**. Orchestrator phải truyền code,
+> diff và tri thức liên quan trong `context`, rồi tự áp dụng/review kết quả. Muốn giao hẳn việc sửa
+> file thì dùng `host-cli`; Brain không rót credential đã lưu vào CLI. Chi tiết ở
 > [`sub-agents/models-and-fallback.md`](sub-agents/models-and-fallback.md).
 
 ## Bước 3 — Tinh luyện repo → file instance
@@ -271,8 +277,8 @@ Khi đã có LLM:
 - [ ] **`ALICE.project.md` đã điền đủ 7 mục**, không còn `‹đặc tả khi init›` bỏ sót.
 - [ ] **Không sửa file template nào** (`ALICE.md`, `wiki/README.md`, `sub-agents/*`, `brain/*.md`).
 - [ ] **`npm run verify` → 0 ERROR.**
-- [ ] Setup advisor đã chạy: registry Settings → Sub Agents đã được đọc/cấu hình theo yêu cầu; slot
-      ghi vào `ALICE.project.md` đã smoke bằng CLI thật; MCP nếu đề xuất có mục đích riêng và đã test.
+- [ ] Setup advisor đã chạy: `list_sub_agents` đọc đúng registry; slot mode `brain` đã smoke bằng
+      `ask_sub_agent`; slot mode `host-cli` đã smoke bằng CLI thật; không suy registry từ CLI.
 - [ ] **Brain** (nếu bật): đúng source + **tất cả document `ready`**, không có `failed/paused`; smoke
       `search` + `get_entity` chạy **sau READY**; sync một file đã đổi và xác nhận số document không
       tăng do trùng. Hoặc ghi rõ `brain = disabled` + fallback. `brain.config`/state/`.sag-data` đã gitignore.
@@ -312,10 +318,10 @@ Bạn là Alice, làm theo knowledge/ALICE.md + knowledge/ALICE.project.md trên
     đánh SUPERSEDED) → `npm run verify` (phải 0 ERROR) →
     `npm run sync`. Report theo ALICE mục 8 (có mục "tri thức đã ghi").
 
-[E] Giao việc cho sub-agent (nếu có): lấy slot từ knowledge/ALICE.project.md mục 7, gọi qua
-    knowledge/sub-agents/base-prompt.md, rồi ghi lại bằng tool MCP `log_agent_task`
-    (agent + task + status; thêm model/token/cost nếu CLI có báo). Brain không nhìn thấy
-    sub-agent chạy ngoài máy — không khai thì việc đó không tồn tại trên trang Telemetry.
+[E] Giao việc cho sub-agent (nếu có): gọi `list_sub_agents`, đối chiếu policy ở
+    knowledge/ALICE.project.md mục 7. Phân tích/review → `ask_sub_agent` với code + tri thức
+    liên quan trong context; Brain tự ghi telemetry. Tự đọc/sửa file → host CLI qua
+    knowledge/sub-agents/base-prompt.md, rồi khai bằng `log_agent_task`.
 
 ## NHIỆM VỤ
 <Bệ hạ chỉ cần điền việc cần làm ở đây>

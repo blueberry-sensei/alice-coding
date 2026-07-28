@@ -41,10 +41,17 @@ Nhãn "ai gọi" do client khai — dùng để phân biệt, **không** dùng �
 
 Không khai thì bản ghi mang nhãn `mcp-stdio` / `mcp-http` — vẫn ghi, chỉ là không biết ai.
 
-## 3. Việc giao cho sub-agent — **phải tự khai**
+## 3. Việc giao cho sub-agent
 
-Sub-agent chạy bằng CLI trên máy (opencode, codex, gemini…) **không đi qua brain**, nên brain
-không thể tự thấy. Đường duy nhất để việc đó lên telemetry là orchestrator gọi tool MCP:
+Hai đường có bằng chứng khác nhau:
+
+1. `list_sub_agents` tự ghi một event **Sub-agent registry**: agent đã đọc slot nào từ nguồn sự
+   thật, không phải dò CLI hay đoán API.
+2. `ask_sub_agent` tự ghi **delegation** + request LLM: provider/model, task, kết quả xem trước,
+   token provider trả về, độ trễ và lỗi. Không gọi `log_agent_task` lần nữa.
+
+Sub-agent chạy bằng CLI trên máy (opencode, codex, gemini…) **không đi qua Brain**, nên vẫn phải
+được orchestrator khai bằng:
 
 ```
 log_agent_task(agent="opencode-go", task="đổi 12 form sang schema mới",
@@ -65,12 +72,16 @@ Ai không cắm MCP thì dùng đường HTTP tương đương: `POST /api/v1/te
 | Nhiều `probe` | Đang bấm Test nhiều; mỗi lần bấm là một lần tốn tiền thật. |
 | `generation` tăng mà `knowledge call` không tăng | Agent đang trả lời bằng trí nhớ context, không tra não. |
 | Nhiều `search` nhưng `result 0` | Câu truy vấn lệch với tri thức đã ingest, hoặc chưa sync. |
-| Không có bản ghi `delegation` nào | Orchestrator chưa gọi `log_agent_task` — không phải "không delegate". |
+| Có `Sub-agent registry` nhưng không có `delegation` | Agent đã đọc cấu hình nhưng chưa gọi `ask_sub_agent` hay chưa khai lượt CLI. |
+| `delegation` có kết quả xem trước | Lượt này đi qua `ask_sub_agent`; Brain đo được request thật. |
+| `delegation` chỉ có note verify | Lượt CLI ngoài Brain do orchestrator tự khai bằng `log_agent_task`. |
 | Lời gọi thất bại dồn vào một model | Xem thêm Settings → Model → Call history để biết loại lỗi và nhà nào bị tắt. |
 
 ## 5. Ranh giới — nói thẳng để không tin nhầm
 
 - Brain chỉ thấy lời gọi **đi qua chính nó**. Token mà Claude Code / Codex tiêu cho phiên vibe
   nằm ở nhà cung cấp của agent đó, **không** có ở đây.
-- Số của sub-agent là **do khai**, không kiểm chứng được.
+- Token của `ask_sub_agent` lấy từ response provider; số của `log_agent_task` vẫn là **do khai**.
+- `ask_sub_agent` không có filesystem. Kết quả telemetry chứng minh model đã trả lời, không chứng
+  minh code đã được sửa hay verify.
 - Chi phí là **ước tính theo bảng giá**, không phải hoá đơn. Hoá đơn thật vẫn ở phía nhà cung cấp.

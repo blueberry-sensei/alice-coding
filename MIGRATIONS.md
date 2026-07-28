@@ -6,6 +6,23 @@ Quy ước version: **semver**. MAJOR đổi = có breaking change bắt buộc 
 
 ---
 
+## 2.4.7 — Sub-agent chạy qua Brain, không cần chép lại key
+
+**Không breaking.** `npm run update` rồi `npm run brain`.
+
+MCP brain có hai tool mới:
+
+- `list_sub_agents` đọc đúng Settings → Sub Agents, chỉ trả model/trạng thái đã che credential;
+- `ask_sub_agent` gọi model đã bật bằng credential được giải mã bên trong Brain, rồi tự ghi provider,
+  model, token, độ trễ và kết quả xem trước lên Telemetry.
+
+Agent không còn được đoán endpoint registry, suy registry từ CLI trên máy, hoặc bắt người dùng dán
+lại key thành biến môi trường chỉ để gọi model qua Brain. Ranh giới vẫn rõ: `ask_sub_agent` chỉ nhận
+task + context và không có filesystem; giao việc tự đọc/sửa file vẫn dùng host CLI với auth riêng,
+sau đó khai bằng `log_agent_task`.
+
+---
+
 ## 2.4.6 — URL và source mang danh tính project
 
 **Không breaking.** `npm run update` rồi `npm run brain`.

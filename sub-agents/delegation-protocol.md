@@ -1,17 +1,19 @@
 # Delegation Protocol (agent-agnostic)
 
-Quy trình chung khi Alice giao việc code cho một sub-agent bất kỳ. Phần lệnh cụ thể xem `opencode/README.md`, `gemini/README.md`.
+Quy trình chung khi Alice giao việc cho sub-agent. Có hai đường: `brain` để lấy phân tích/review
+không đụng filesystem; `host-cli` để coding agent tự đọc/sửa/verify file.
 
 ## Vòng lặp chuẩn
 
 ```
 0. Alice: kiểm ngưỡng delegate (README.md) — không đủ ≥3 dấu hiệu thì TỰ LÀM
 1. Alice: recall qua brain → khảo sát repo tối thiểu để viết spec đúng pattern
-2. Alice: viết task-spec self-contained (spec-template.md) + NHÉT tri thức đã recall vào
-3. Sub-agent: chạy headless, tự sửa file, tự verify (model theo models-and-fallback.md)
-4. Alice: đọc `git diff` + mục BÀI HỌC của SUBAGENT_SUMMARY.md → review
-5. Alice: THU HỒI TRI THỨC — distill bài học sub-agent vào mistakes/decisions (bước 6 dưới)
-6. Alice: đạt → báo cáo; chưa → viết spec sửa lỗi, quay lại (3)
+2. Alice: gọi `list_sub_agents`, chọn execution mode theo task
+3a. `brain`: `ask_sub_agent(task, context=code + diff + tri thức)` → Alice kiểm chứng và tự áp dụng
+3b. `host-cli`: task spec + base prompt → sub-agent tự sửa file, tự verify
+4. Alice: review source/diff + chạy verify project
+5. Alice: thu hồi bài học vào mistakes/decisions/wiki
+6. Alice: đạt → báo cáo; chưa → viết spec sửa lỗi, quay lại bước 3
 ```
 
 ## Bước 1–2: Alice viết spec
@@ -20,7 +22,15 @@ Spec tốt = sub-agent không phải đoán. Bắt buộc có: **Mục tiêu**; 
 
 Khảo sát repo *đủ để viết spec đúng* — đừng đọc thừa (đó là token cần tiết kiệm). Không chắc pattern thì đọc đúng 1 file mẫu rồi trích dẫn trong spec.
 
-## Bước 3: chạy sub-agent (kỷ luật token)
+## Bước 3a: gọi qua Brain
+
+- Gọi `list_sub_agents`, không dò CLI để đoán registry.
+- `ask_sub_agent` chỉ nhận `provider`, `task`, `context`; không nhận credential hoặc base URL.
+- `context` phải chứa đoạn code/diff, ràng buộc và tri thức đã recall đủ để trả lời.
+- Kết quả là **tư vấn**, không phải bằng chứng file đã sửa hay test đã chạy.
+- Tool tự ghi telemetry; không gọi `log_agent_task` lặp lại.
+
+## Bước 3b: chạy host CLI (kỷ luật token)
 
 **Luôn gọi qua [base-prompt.md](base-prompt.md)** — prepend preamble chuẩn (ép sub-agent đọc ALICE + mistakes + đúng trang wiki) rồi mới tới `## NHIỆM VỤ`. Không tự chế base prompt riêng.
 
@@ -56,9 +66,9 @@ Cách bịt: bắt sub-agent **tự viết bài học ra file**, Alice đọc fi
 
 Bỏ bước này = task chưa hoàn thành, ngang với quên verify.
 
-## Bước 5b: Ghi telemetry một dòng (rẻ, và là thứ duy nhất còn lại sau phiên)
+## Bước 5b: Ghi telemetry cho host CLI
 
-Sau khi review xong, gọi tool MCP của brain:
+Chỉ sau lượt `host-cli`, gọi tool MCP của brain:
 
 ```
 log_agent_task(agent="<slot>", task="<một dòng>", status="done|failed",
@@ -69,7 +79,8 @@ Giao việc dài thì ghi `status="started"` lúc giao và ghi lại lúc xong. 
 thì điền `input_tokens` / `output_tokens` / `cost_usd`; **không có thì để trống, đừng ước lượng** —
 bản ghi được đánh dấu `reported` chính vì nó là số do agent khai.
 
-Vì sao bắt buộc: sub-agent chạy trên máy **không đi qua brain**, nên đây là đường duy nhất để
+Không dùng bước này cho `ask_sub_agent`: Brain đã tự ghi request, token, kết quả xem trước và trạng
+thái thật. Với host CLI, khai là bắt buộc vì nó **không đi qua Brain**, nên đây là đường duy nhất để
 "ai đã làm gì qua ALICE" hiện ra ở Settings → Telemetry cạnh chi phí tinh luyện và dấu vết truy
 xuất tri thức. Xem [`../brain/TELEMETRY.md`](../brain/TELEMETRY.md).
 

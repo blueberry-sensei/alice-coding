@@ -9,7 +9,7 @@
 **Một sản phẩm của [Blueberry Sensei](https://github.com/blueberry-sensei).**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.6-6E56CF)](VERSION)
+[![Version](https://img.shields.io/badge/version-2.4.7-6E56CF)](VERSION)
 [![Engine](https://img.shields.io/badge/engine-ALICE%20CORE-6E56CF)](#alice-core-khác-rag-thường-ở-đâu)
 [![Embedding](https://img.shields.io/badge/embedding-bge--m3%20local-2EA043)](https://huggingface.co/BAAI/bge-m3)
 [![Runtime](https://img.shields.io/badge/runtime-Docker-2496ED?logo=docker&logoColor=white)](#4-cài-đặt)
@@ -186,9 +186,13 @@ Mọi agent hỗ trợ MCP đều có thể tra cùng một brain:
 - Agent chính có thể giao một phần việc cho sub-agent rồi thu hồi kết quả về cùng context.
 - Mỗi lần agent gọi tool tri thức đều có actor, câu hỏi, kết quả và citation để truy vết.
 
-**Settings → Sub Agents là registry**, không phải dịch vụ chạy agent hộ. Nó lưu slot
-provider/model đã được xác thực; orchestrator vẫn gọi CLI bằng phiên đăng nhập của chính CLI đó.
-Credential không được chép vào prompt hay project.
+**Settings → Sub Agents là registry kiêm cổng gọi model an toàn.** Agent đọc đúng nguồn sự thật
+bằng `list_sub_agents`, rồi dùng `ask_sub_agent` để gửi một task phân tích/review qua credential
+đã mã hoá trong Brain. Key không bị trả ra agent, prompt, project hay biến môi trường host.
+
+Ranh giới không được nói quá: sub-agent qua Brain chỉ thấy `task` + `context` được truyền vào,
+không có filesystem và không tự sửa code. Giao việc cần đọc/sửa file vẫn đi qua CLI trên host bằng
+auth riêng của CLI, sau đó orchestrator khai telemetry bằng `log_agent_task`.
 
 ### Telemetry: biết AI đã làm gì và tốn bao nhiêu
 
@@ -198,7 +202,7 @@ Credential không được chép vào prompt hay project.
 - token vào/ra, độ trễ, thành công hay thất bại;
 - chi phí ước tính khi có bảng giá; chưa biết giá thì ghi **unknown**, không giả vờ bằng `0`;
 - agent nào đã tra tri thức, gọi tool gì và lấy những citation nào;
-- lần delegate sub-agent nào đã được orchestrator khai báo.
+- lần nào agent đọc registry, gọi sub-agent qua Brain, hoặc khai một lượt CLI ngoài Brain.
 
 Telemetry được bắt tại lớp gọi model dùng chung, nên không chỉ thấy chat mà còn thấy đường
 trích xuất chạy bên trong ALICE CORE. Embedding có usage sink riêng vì không đi qua cùng lớp đó.

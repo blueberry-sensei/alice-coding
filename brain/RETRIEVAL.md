@@ -67,4 +67,6 @@ Bỏ bước này = task **chưa** đạt kỷ luật (soi ở verify — `ALICE
 3. **Cảnh báo Bệ hạ**: *"Não offline — recall theo chế độ file, có thể sót tri thức liên quan gián tiếp."*
 4. Không bao giờ hard-fail vì thiếu brain.
 
-> Sub-agent **luôn** chạy ở chế độ này: nó không được mount MCP brain. Xem [`sub-agents/delegation-protocol.md`](../sub-agents/delegation-protocol.md) — orchestrator phải nhét sẵn tri thức đã recall vào spec.
+> Sub-agent **luôn** không được mount MCP brain. Với `ask_sub_agent`, orchestrator truyền tri thức
+> đã recall cùng code/diff cần xem trong `context`; với host CLI, nhét chúng vào task spec. Xem
+> [`sub-agents/delegation-protocol.md`](../sub-agents/delegation-protocol.md).

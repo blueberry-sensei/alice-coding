@@ -15,50 +15,52 @@ template này và không lấy từ MCP. Brain có sẵn sáu slot:
 6. Custom provider
 
 Năm slot đầu **không có bảng model hard-code**: Brain xác thực API key với provider rồi lấy danh
-sách model live. Chỉ `Custom provider` mới cho nhập model thủ công. `model_verified=true` chứng minh
-key đã qua discovery và model có trong response tại lúc lưu, nhưng chưa chứng minh CLI trên máy hiện
-tại chạy được; INITIALIZATION vẫn phải dò CLI/auth và chạy một smoke task trước khi ghi
-provider/model vào `ALICE.project.md`.
+sách model live. Chỉ `Custom provider` mới cho nhập model thủ công. Agent đọc registry bằng
+`list_sub_agents`, không đoán REST endpoint và không suy từ CLI trên máy.
 
 Credential lưu trong brain được mã hoá và API chỉ trả trạng thái `credential_set`; danh sách model
-được gọi live, không được nướng vào template. Không chép credential vào `ALICE.project.md`, task
-spec, log hay report. Registry cũng **không tự đăng nhập CLI**: CLI phải được xác nhận bằng chính cơ
-chế đăng nhập và smoke của nó.
+được gọi live, không được nướng vào template. `ask_sub_agent` giải mã key **bên trong Brain** và chỉ
+gửi tới endpoint đã lưu/cố định của slot; key không được trả ra MCP. Không chép credential vào
+`ALICE.project.md`, task spec, log, report hay biến môi trường host.
 
 ## Registry được dùng lúc VIBE như thế nào
 
-Đây là chỗ hay bị hiểu nhầm nhất, nên nói thẳng: **brain không chạy sub-agent hộ.** Nó không gọi
-CLI, không rót credential vào CLI, không "điều phối" agent. Settings → Sub Agents chỉ là **sổ
-đăng ký**: slot nào Bệ hạ bật, model nào đã xác thực với provider.
+Có hai execution mode, không được trộn:
 
-Đường đi thật, theo thứ tự:
+### `brain` — model tư vấn qua MCP
 
-1. **INITIALIZATION** đọc sổ đăng ký trên UI → smoke CLI thật trên máy → **bake** kết quả vào
-   [`../ALICE.project.md`](../ALICE.project.md) mục 7 (provider · model · vai trò · lệnh verify).
-2. **Lúc vibe**, orchestrator đọc **mục 7 của `ALICE.project.md`** — không gọi API brain để hỏi
-   lại, và không tự suy ra từ thứ tự card trên UI.
-3. Đủ [ngưỡng delegate](README.md) → gọi CLI trên máy bằng [base-prompt chuẩn](base-prompt.md).
-   CLI dùng **auth của chính nó trên host** (`opencode auth login`, `gemini auth`…), không phải
-   credential trong brain. Credential trong brain chỉ để brain xác thực và lấy danh sách model.
-4. Xong → review `git diff` + mục `BÀI HỌC`, rồi **ghi lại một dòng telemetry**:
-   `log_agent_task(agent=…, task=…, status=done|failed, model=…, note=…)` qua MCP brain
-   (xem [`../brain/TELEMETRY.md`](../brain/TELEMETRY.md)). Sub-agent chạy ngoài máy không đi qua
-   brain, nên **không khai thì việc đó không tồn tại** trên trang Telemetry.
+1. Gọi `list_sub_agents`; chỉ chọn slot `callable=yes` và phù hợp policy ở
+   [`../ALICE.project.md`](../ALICE.project.md) mục 7.
+2. Main agent đã đọc source/recall tri thức, rồi truyền **task + code/diff + ràng buộc** vào
+   `ask_sub_agent`.
+3. Brain gọi provider bằng credential đã lưu, trả text và tự ghi telemetry. Không gọi
+   `log_agent_task` lần nữa.
+4. Main agent kiểm chứng kết quả với source thật trước khi áp dụng.
 
-Hệ quả phải nhớ: đổi slot trên UI **không** tự đổi hành vi của phiên vibe đang chạy — mục 7 mới
-là thứ agent đọc. Đổi xong thì cập nhật `ALICE.project.md`, hoặc chạy lại phần 2e của
-INITIALIZATION.
+Mode này hợp phân tích, review diff, tìm edge case, đề xuất test. Nó **không có filesystem, shell,
+MCP brain hay quyền sửa code**. Nếu main agent không truyền context thì sub-agent không biết project.
+
+### `host-cli` — coding agent có filesystem
+
+1. CLI phải được cài, đăng nhập bằng auth riêng và smoke thật.
+2. Gọi qua [base-prompt chuẩn](base-prompt.md), để CLI đọc/sửa/verify trên filesystem.
+3. Main agent review diff + bài học.
+4. Vì Brain không thấy CLI, khai `log_agent_task` sau mỗi trạng thái.
+
+Credential trong registry **không rót vào CLI**. Không bảo Bệ hạ dán lại key chỉ để dùng mode
+`brain`; chỉ xin auth host khi Bệ hạ thật sự chọn mode `host-cli`.
 
 ## Quy tắc chọn và fallback
 
-1. Chỉ giao việc cho slot đang **bật** trong Settings và đã smoke trên máy hiện tại.
-2. Dùng policy đã bake ở `ALICE.project.md` mục 7; không tự suy ra ưu tiên từ thứ tự card trên UI.
+1. Mode `brain`: chỉ gọi slot `callable=yes` từ `list_sub_agents`; mode `host-cli`: chỉ gọi CLI đã
+   smoke trên máy hiện tại.
+2. Dùng policy ở `ALICE.project.md` mục 7; không tự suy ra ưu tiên từ thứ tự card trên UI.
 3. **Lỗi thông thường** (network, timeout, 5xx, connection reset) → retry cùng model 2–3 lần với
    backoff ngắn.
 4. **Hết quota / rate limit** (429, "quota exceeded", "resource exhausted", "rate limit") → chuyển
    sang slot dự bị kế tiếp trong policy của project. Không quay lại slot vừa hết quota trong cùng task.
-5. **Lỗi auth** (401/403, "invalid api key", "unauthenticated") → dừng slot đó và báo Bệ hạ cần
-   đăng nhập lại. Không tự đổi credential.
+5. **Lỗi auth** (401/403, "invalid api key", "unauthenticated") → dừng slot đó. Mode `brain` yêu
+   cầu cập nhật credential trong Settings; mode `host-cli` yêu cầu đăng nhập lại CLI. Không tự đổi key.
 6. **Model không tồn tại / bị gỡ** → dừng slot, tải lại danh sách live trong Settings, đối chiếu CLI
    rồi smoke lại. Không gõ model khác vào preset để lách validation; nếu provider không có contract
    discovery mặc định thì dùng `Custom provider`.

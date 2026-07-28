@@ -2,7 +2,13 @@
 
 **Mục tiêu:** mọi orchestrator (Alice/Claude/Gemini/Codex) khi giao việc cho sub-agent đều prepend **cùng một** preamble này, để sub-agent **nạp đủ context project** trước khi làm — thay vì mỗi orchestrator tự chế một base prompt riêng, dẫn tới context lệch.
 
-> Vì sao cần: sub-agent khởi động **trắng trơn** và **không có não** (không được mount MCP brain). Nó không thể tự tìm ra tri thức liên quan gián tiếp. Base prompt này ép nó đọc file, còn **orchestrator phải nhét sẵn tri thức đã recall vào spec**.
+> Phạm vi: prompt này dành cho mode **`host-cli`**, nơi sub-agent có filesystem và được giao đọc/sửa
+> file. Với mode **`brain`** qua `ask_sub_agent`, model không có filesystem; orchestrator truyền
+> thẳng code/diff + tri thức đã recall trong tham số `context`, không dùng prompt bắt đọc file này.
+
+> Vì sao cần cho host CLI: sub-agent khởi động **trắng trơn** và **không có não** (không được mount
+> MCP brain). Nó không thể tự tìm ra tri thức liên quan gián tiếp. Base prompt này ép nó đọc file,
+> còn **orchestrator phải nhét sẵn tri thức đã recall vào spec**.
 
 ## Cách dùng (orchestrator)
 

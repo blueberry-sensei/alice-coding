@@ -37,6 +37,7 @@
 ‹đặc tả khi init — file/thư mục sinh tự động, vendor, secret, migration đã chạy production›
 
 ## 7. Cấu hình sub-agent của project
-‹đặc tả khi init — agent phụ có sẵn trên máy, model policy đã chốt, lệnh verify để nhét vào spec›
+‹đặc tả khi init — lấy slot đang bật và model_verified=true từ Brain → Settings → Sub Agents; chỉ
+ghi provider/model/vai trò đã smoke và lệnh verify để nhét vào spec; tuyệt đối không ghi credential›
 
 Xem [`sub-agents/README.md`](sub-agents/README.md) để biết khi nào nên delegate.

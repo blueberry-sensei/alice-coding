@@ -179,12 +179,12 @@ function uninstall(argv) {
   if (!keepCache) {
     console.log(C.d("\nDocker does not label build cache per project, so it cannot filter out just this"));
     console.log(C.d("brain's share - clearing it clears the whole machine. No data is lost; it only makes"));
-    console.log(C.d("the next build of EVERY project slower. Keep it: npm run uninstall -- --yes --keep-cache"));
+    console.log(C.d("the next build of EVERY project slower. Keep it: npm run uninstall:keep-cache"));
   }
 
   if (!yes) {
     console.log(C.y("\nThis CANNOT be undone (brain data has to be ingested again from scratch)."));
-    console.log("If you are sure, run: " + C.b("npm run uninstall -- --yes"));
+    console.log("If you are sure, run: " + C.b("npm run uninstall:yes"));
     return 2;
   }
 
@@ -250,7 +250,7 @@ function uninstall(argv) {
 
   console.log(failed ? C.r("\nRemoval incomplete - see the errors above.")
                      : C.g("\nDocker and runtime removed. Your knowledge base is untouched."));
-  console.log(C.d("Rebuild: npm run brain   |   Also wipe knowledge: npm run reset -- --yes"));
+  console.log(C.d("Rebuild: npm run brain   |   Also wipe knowledge: npm run reset:yes"));
   return failed ? 1 : 0;
 }
 
@@ -292,7 +292,7 @@ function reset(argv) {
   if (!yes) {
     console.log(C.y("\nThere is no backup. If knowledge/ is committed you can still recover it with git;"));
     console.log(C.y("if it is not, the knowledge is gone for good."));
-    console.log("If you are sure, run: " + C.b("npm run reset -- --yes"));
+    console.log("If you are sure, run: " + C.b("npm run reset:yes"));
     return 2;
   }
 
@@ -563,7 +563,10 @@ const [cmd, ...rest] = process.argv.slice(2);
   update    upgrade the template       mcp     print the MCP config for your agent
 
 Via npm: npm run doctor | npm run brain | npm run verify | npm run sync
-Destructive: npm run uninstall -- --yes   |   npm run reset -- --yes`);
+Destructive: npm run uninstall:yes   |   npm run reset:yes
+
+Note: on Windows PowerShell the npm.ps1 shim drops "--", so "npm run x -- --flag"
+never reaches the script. Every flag has its own npm script for that reason.`);
       process.exit(cmd ? 2 : 0);
   }
 })();

@@ -31,10 +31,14 @@ Sync khi kho tri thức đang hỏng còn tệ hơn không sync: nó nhồi tran
 ## Chạy
 ```bash
 npm run sync                 # đồng bộ incremental (chỉ file đổi)
-npm run sync:rebuild       # xoá sạch source + ingest lại toàn bộ
-npm run sync -- --no-verify     # bỏ gate — chỉ khi gỡ lỗi
-npm run sync -- --config path/brain.config
+npm run sync:rebuild         # xoá sạch source + ingest lại toàn bộ
+npm run sync:no-verify       # bỏ gate — chỉ khi gỡ lỗi
+npm.cmd run sync -- --config path/brain.config   # cờ có giá trị: xem ghi chú dưới
 ```
+
+> Trên **Windows PowerShell**, `npm` là `npm.ps1` và shim đó nuốt mất token `--`, nên
+> `npm run sync -- --config …` không tới được script. Cờ nào cần giá trị thì gọi `npm.cmd`.
+> Cờ không có giá trị đều đã có script npm riêng (`sync:rebuild`, `sync:no-verify`, …).
 Máy không có Python → chạy trong container: `docker compose exec api python /work/brain/sync/sync.py`.
 
 ## Nhịp sync (tiêu chí C)

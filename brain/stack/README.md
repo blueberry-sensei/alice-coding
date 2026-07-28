@@ -69,7 +69,7 @@ npm run brain:down       # tắt (giữ data)
 ## Dữ liệu & vòng đời
 - Toàn bộ "não" (SQLite + LanceDB + upload) nằm trong **named volume** `<BRAIN_ID>_sagdata`, model Ollama ở `<BRAIN_ID>_ollama`. Không còn file dữ liệu nào trong cây repo → không thể lỡ tay commit, và copy thư mục project đi nơi khác không kéo theo "não".
 - Xem/sao lưu: `docker volume ls`, hoặc `docker run --rm -v <BRAIN_ID>_sagdata:/d -v "$PWD":/out alpine tar czf /out/brain-backup.tgz -C /d .`
-- `npm run brain:uninstall -- --yes` gỡ **sạch**: container, network, volume, image của brain
+- `npm run uninstall:yes` gỡ **sạch**: container, network, volume, image của brain
   này, image mồ côi, **và build cache của Docker** — phần cuối thường là vài chục GB và là lý do
   "gỡ rồi mà đĩa vẫn đầy". Build cache dùng chung cả máy nên nếu đang có project Docker khác thì
   thêm `--keep-cache` để giữ (chỉ mất tốc độ build lần sau, không mất dữ liệu).

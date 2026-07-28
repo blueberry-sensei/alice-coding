@@ -10,7 +10,8 @@ Google (AI Studio API key free) đã auth trong opencode → gọi gemini y hệ
 opencode run -m google/gemini-3.6-flash --agent build --auto --dir "<path>" "$(cat spec.md)" > run.log 2>&1
 ```
 
-Model string khả dụng (verify bằng `opencode models google`): `google/gemini-3.6-flash`, `google/gemini-3.5-flash`, `google/gemini-3.1-pro-preview`, `google/gemini-3-flash-preview`, ... Đây chính là các bậc 2–5 trong [../models-and-fallback.md](../models-and-fallback.md).
+Model cho đường OpenCode phải đối chiếu bằng catalog thật của OpenCode. Model cho Gemini CLI lấy từ
+slot Gemini CLI đang bật ở Brain → Settings → Sub Agents; không dùng bảng model tĩnh trong repo.
 
 → Ưu điểm: dùng chung toàn bộ recipe/gotcha của [opencode](../opencode/README.md), không phải học tool mới. **Khuyến nghị dùng cách này** trừ khi cần tính năng riêng của Gemini CLI.
 
@@ -27,5 +28,5 @@ Khi init/cài, điền theo khung như [opencode/README.md](../opencode/README.m
 
 ## Lưu ý
 
-- Gemini flash (bậc 2–3) hợp task cơ học; pro-preview (bậc 4) cho task khó hơn — theo model policy.
+- Gemini Flash hợp task cơ học; Pro hợp task khó hơn. Dùng đúng alias/model đã smoke trong registry.
 - Quy trình chung (viết spec, review gate, kỷ luật token) **dùng lại nguyên** [delegation-protocol.md](../delegation-protocol.md).

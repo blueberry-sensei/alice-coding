@@ -15,7 +15,8 @@ Sub-agent chính hiện dùng. CLI docs: https://opencode.ai/docs/cli/ (dưới 
 | Providers | `opencode auth list` — mặc định máy này: **OpenCode Go + Google (+ ZEN free)** |
 | Desktop GUI | Có thể cài kèm (`@opencode-aidesktop`), Electron, **KHÔNG có headless** — tách biệt CLI |
 
-**Model** dùng theo [../models-and-fallback.md](../models-and-fallback.md) (ưu tiên `opencode/deepseek-v4-flash-free`).
+**Model** lấy từ slot OpenCode GO/ZEN đang bật ở Brain → Settings → Sub Agents, rồi đối chiếu
+`opencode models` trên máy hiện tại trước khi chạy.
 
 ## Lệnh cốt lõi: `opencode run` (non-interactive)
 

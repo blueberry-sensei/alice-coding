@@ -30,7 +30,7 @@ npm run update         # làm thật
 npm run verify         # bắt buộc: kiểm lại kho tri thức
 ```
 
-Ghim một version cụ thể: `npm run update -- --ref v2.1.0`. Dùng fork riêng: đặt biến môi trường `ALICE_TEMPLATE_REPO`.
+Ghim một version cụ thể: `npm.cmd run update -- --ref v2.1.0` (dùng `npm.cmd`: trên PowerShell, `npm.ps1` nuốt mất `--`). Dùng fork riêng: đặt biến môi trường `ALICE_TEMPLATE_REPO`.
 
 ## Sau khi update
 
@@ -42,7 +42,7 @@ Ghim một version cụ thể: `npm run update -- --ref v2.1.0`. Dùng fork riê
 
 ## Rollback
 
-Tri thức project không bị `update` đụng nên rollback chỉ là chuyện của template: `git checkout` lại thư mục `knowledge/` trong repo project của bạn (đây là lý do nên commit `knowledge/`), hoặc `npm run update -- --ref <version-cũ>`.
+Tri thức project không bị `update` đụng nên rollback chỉ là chuyện của template: `git checkout` lại thư mục `knowledge/` trong repo project của bạn (đây là lý do nên commit `knowledge/`), hoặc `npm.cmd run update -- --ref <version-cũ>`.
 
 ## Dành cho người bảo trì template
 

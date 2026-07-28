@@ -51,6 +51,7 @@ TEMPLATE_GLOBS = [
     "VERSION", "LICENSE", ".gitattributes", ".gitignore",
     "README.md", "ALICE.md", "INITIALIZATION.md", "UPGRADE.md", "MIGRATIONS.md",
     "package.json",
+    "assets/alice-coding.png",
     "tools/verify.py", "tools/update.py", "tools/cli.js", "tools/verify.config.example",
     "brain/*.md", "brain/brain.config.example", "brain/sync/*.py",
     # `*.js` là bắt buộc: brain-env.js tính danh tính brain và được CẢ HAI launcher gọi.

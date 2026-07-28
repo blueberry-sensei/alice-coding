@@ -18,10 +18,10 @@ Nơi chứa kiến thức, bài học, và **cách vận hành** khi Alice (agen
 | File | Nội dung |
 |---|---|
 | [base-prompt.md](base-prompt.md) | **Base prompt CHUẨN gọi sub-agent** — ép nạp đủ context project, dùng chung mọi lần gọi |
-| [models-and-fallback.md](models-and-fallback.md) | Model nào dùng, khi nào, **thứ tự ưu tiên + fallback** khi lỗi/hết quota |
+| [models-and-fallback.md](models-and-fallback.md) | Contract Settings → Sub Agents, cách chọn model và fallback khi lỗi/hết quota |
 | [delegation-protocol.md](delegation-protocol.md) | Quy trình agent-agnostic: viết spec → chạy → review gate → kỷ luật token |
 | [spec-template.md](spec-template.md) | Template task-spec tái dùng (điền vào `## NHIỆM VỤ` của base-prompt) |
-| [mcp.md](mcp.md) | Tư vấn MCP theo từng agent (chrome/browser test, v.v.) |
+| [mcp.md](mcp.md) | Tư vấn capability MCP tùy chọn (browser/docs/DB), không chứa cấu hình provider/model |
 | [opencode/README.md](opencode/README.md) | opencode: CLI, cách gọi headless, recipe, gotcha |
 | [gemini/README.md](gemini/README.md) | gemini: qua opencode `google/*` hoặc Gemini CLI standalone |
 
@@ -54,7 +54,7 @@ Nơi chứa kiến thức, bài học, và **cách vận hành** khi Alice (agen
 |---|---|---|
 | **Claude Code** | Task/Agent tool **native** (`general-purpose`) | Chạy cùng hạng model → **không rẻ đi**. Lợi ích ở đây là **cô lập context** (transcript sub-agent không tràn vào context chính), không phải giá. Muốn rẻ thật thì gọi CLI ngoài. |
 | **Codex** | sub-agent/CLI ngoài | |
-| **opencode** | `opencode run` headless, model theo [models-and-fallback.md](models-and-fallback.md) | Rẻ nhất — đây là đường tiết kiệm token thật sự |
+| **opencode** | `opencode run` headless, chọn slot/model đã bật trong Settings → Sub Agents | Có nhiều model rẻ; chỉ gọi slot đã smoke thật |
 | **Gemini CLI** | standalone hoặc qua opencode `google/*` | |
 
 > Đọc kỹ: nếu orchestrator và sub-agent **cùng hạng model**, delegate **không tiết kiệm tiền** — chỉ tiết kiệm *context*. Đừng viện lý do "tiết kiệm token" khi thực tế không tiết kiệm; hãy nói đúng lý do là cô lập context.

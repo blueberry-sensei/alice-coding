@@ -1,40 +1,51 @@
 # Model policy & Fallback
 
-Quy định **model nào được dùng, khi nào, và tụt ưu tiên ra sao** khi lỗi/hết quota. Sub-agent phải luôn bắt đầu từ ưu tiên cao nhất còn khả dụng.
+Quy định cách chọn model và tụt ưu tiên khi sub-agent lỗi/hết quota.
 
-> ⚙️ **Bản generic:** bảng dưới là **policy mặc định của chủ repo** trên máy hiện tại (đã verify qua `opencode auth list` + `opencode models`). Khi init ở máy/tài khoản khác, chạy lại 2 lệnh đó và **cập nhật bảng cho khớp thực tế** — đừng tin cứng.
+## Nguồn sự thật
 
-## Thứ tự ưu tiên (cao → thấp)
+Provider/model được bật cho project nằm ở **Brain → Settings → Sub Agents**, không nằm trong file
+template này và không lấy từ MCP. Brain có sẵn sáu slot:
 
-| # | Model string (opencode CLI) | Nguồn | Ghi chú |
-|---|---|---|---|
-| 1 | `opencode/deepseek-v4-flash-free` | OpenCode ZEN (free) | **Mặc định.** Miễn phí, ưu tiên tuyệt đối. |
-| 2 | `google/gemini-3.6-flash` | Google AI Studio (free key) | Flash mới nhất |
-| 3 | `google/gemini-3.5-flash` | Google | |
-| 4 | `google/gemini-3.1-pro-preview` | Google | Pro — mạnh hơn, cho task khó hơn |
-| 5 | `google/gemini-3-flash-preview` | Google | |
-| 6 | `opencode-go/deepseek-v4-flash` | OpenCode GO (trả phí) | **Cuối cùng** — chỉ khi trên đều hết |
+1. Claude
+2. Codex
+3. OpenCode GO
+4. OpenCode ZEN
+5. Gemini CLI
+6. Custom provider
 
-## Quy tắc fallback
+Năm slot đầu **không có bảng model hard-code**: Brain xác thực API key với provider rồi lấy danh
+sách model live. Chỉ `Custom provider` mới cho nhập model thủ công. `model_verified=true` chứng minh
+key đã qua discovery và model có trong response tại lúc lưu, nhưng chưa chứng minh CLI trên máy hiện
+tại chạy được; INITIALIZATION vẫn phải dò CLI/auth và chạy một smoke task trước khi ghi
+provider/model vào `ALICE.project.md`.
 
-1. **Lỗi thông thường** (network, timeout, 5xx, connection reset) → **retry cùng model** 2–3 lần với backoff ngắn. Đừng vội tụt ưu tiên vì một lỗi thoáng qua.
-2. **Hết quota / rate limit** (429, "quota exceeded", "resource exhausted", "rate limit") → **tụt xuống model ưu tiên kế tiếp** trong bảng. Không quay lại ưu tiên cao cho tới phiên/task sau (quota thường theo cửa sổ thời gian).
-3. **Lỗi auth** (401/403, "invalid api key", "unauthenticated") → **dừng và báo Bệ hạ** cần re-auth (`opencode auth login`). Không tự đổi credential.
-4. **Model không tồn tại / bị gỡ** → bỏ qua, tụt tiếp, và ghi chú để cập nhật lại bảng.
+Credential lưu trong brain được mã hoá và API chỉ trả trạng thái `credential_set`; danh sách model
+được gọi live, không được nướng vào template. Không chép credential vào `ALICE.project.md`, task
+spec, log hay report. Registry cũng **không tự đăng nhập CLI**: CLI phải được xác nhận bằng chính cơ
+chế đăng nhập và smoke của nó.
+
+## Quy tắc chọn và fallback
+
+1. Chỉ giao việc cho slot đang **bật** trong Settings và đã smoke trên máy hiện tại.
+2. Dùng policy đã bake ở `ALICE.project.md` mục 7; không tự suy ra ưu tiên từ thứ tự card trên UI.
+3. **Lỗi thông thường** (network, timeout, 5xx, connection reset) → retry cùng model 2–3 lần với
+   backoff ngắn.
+4. **Hết quota / rate limit** (429, "quota exceeded", "resource exhausted", "rate limit") → chuyển
+   sang slot dự bị kế tiếp trong policy của project. Không quay lại slot vừa hết quota trong cùng task.
+5. **Lỗi auth** (401/403, "invalid api key", "unauthenticated") → dừng slot đó và báo Bệ hạ cần
+   đăng nhập lại. Không tự đổi credential.
+6. **Model không tồn tại / bị gỡ** → dừng slot, tải lại danh sách live trong Settings, đối chiếu CLI
+   rồi smoke lại. Không gõ model khác vào preset để lách validation; nếu provider không có contract
+   discovery mặc định thì dùng `Custom provider`.
 
 ## Ghi nhận khi phải fallback
 
-- Nếu một task phải tụt ≥2 bậc, hoặc ưu tiên #1 liên tục hết quota → ghi 1 dòng vào [`changelog`](../changelog/README.md) của module liên quan (hoặc `mistakes/` nếu là vấn đề lặp lại đáng học).
-- Report cho Bệ hạ phải nói rõ **cuối cùng model nào đã làm** (vì chất lượng khác nhau theo model).
+- Nếu một task phải đổi từ hai slot trở lên, hoặc slot mặc định liên tục hết quota → ghi một dòng vào
+  [`changelog`](../changelog/README.md) của module liên quan (hoặc `mistakes/` nếu là vấn đề lặp lại).
+- Report cho Bệ hạ phải nói rõ provider/model cuối cùng đã làm, vì chất lượng khác nhau theo model.
 
 ## Nhắc về chất lượng
 
-Model free/flash (ưu tiên 1–3) nhẹ → **spec càng rõ, chia càng nhỏ càng tốt**, và **review gate của Alice càng phải chặt** (dễ để lại lỗi tinh vi: dead code, API cần lib target, bịa endpoint). Task khó cân nhắc pro (#4) hoặc để Alice tự làm.
-
-## Lệnh dò lại thực tế (chạy khi init / khi nghi ngờ)
-
-```bash
-opencode auth list        # provider nào đang auth
-opencode models           # model string chính xác đang khả dụng
-opencode models google    # lọc theo 1 provider
-```
+Model rẻ/nhanh hợp task cơ học; model mạnh hợp review kiến trúc, security và debug nhiều tầng.
+Spec càng rõ, task càng nhỏ và review gate của Alice càng chặt thì fallback càng an toàn.

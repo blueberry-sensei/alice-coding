@@ -20,7 +20,7 @@ flowchart TD
     F --> G4["Bước 4 — Điền ALICE.project.md (KHÔNG sửa ALICE.md)"]
     G4 --> V["Bước 4b — npm run verify → phải 0 ERROR"]
     V --> Gq{"brain bật?"}
-    Gq -->|Có| G["Bước 5 — sync.py ingest knowledge/ → source 'alice-knowledge'<br/>(gate verify chạy trước) + smoke query MCP"]
+    Gq -->|Có| G["Bước 5 — sync knowledge/ → cắm MCP nếu cần<br/>poll TẤT CẢ READY → smoke + sync lại chống trùng"]
     Gq -->|Không| J
     G --> J["Bước 6 — Tự kiểm & report độ phủ + phần chưa xác minh"]
     J --> K["Bước 7 — Xuất vibe base-prompt đã bake (A: nạp ký ức · B: rehydrate · C: /knowledge)"]
@@ -61,14 +61,17 @@ Mục tiêu: giúp Bệ hạ setup **đầy đủ nhất có thể**. Phải **d
 ### 2a. Dò sub-agents đang có
 - Kiểm CLI/agent đã cài (`opencode --version`, `gemini --version`, `codex --version`, `claude` extension).
 - Với opencode: `opencode auth list` + `opencode models` để biết provider/model thực có.
-- Đối chiếu [model policy](sub-agents/models-and-fallback.md) và **ngưỡng delegate** ở [`sub-agents/README.md`](sub-agents/README.md).
+- Đối chiếu **ngưỡng delegate** ở [`sub-agents/README.md`](sub-agents/README.md). Provider/model
+  không lấy từ bảng tĩnh trong repo; sau khi brain chạy, chốt registry ở Bước 2e.
 - Nếu orchestrator là Claude Code: ghi rõ rằng sub-agent native **cùng hạng model → không rẻ hơn**, lợi ích là cô lập context. Đừng hứa tiết kiệm token nếu không có.
 
 ### 2b. Tư vấn cài thêm (chỉ khi Bệ hạ muốn)
 - Nêu **lợi ích cụ thể** của việc thêm 1 agent phụ. Nếu Bệ hạ đồng ý → **hướng dẫn từng bước** → **chạy 1 smoke test thật** → báo pass/fail. Không báo "đã cài" khi chưa test.
 
 ### 2c. Tư vấn MCP (theo từng agent)
-Xem [`sub-agents/mcp.md`](sub-agents/mcp.md). Với mỗi MCP đề xuất: nói rõ **dùng để làm gì**, cách thêm, và test kết nối sau khi thêm.
+Xem [`sub-agents/mcp.md`](sub-agents/mcp.md). MCP là capability tùy chọn (browser/docs/DB), **không
+phải nguồn cấu hình provider/model sub-agent**. Với mỗi MCP đề xuất: nói rõ dùng để làm gì, cách thêm,
+và test kết nối sau khi thêm.
 
 ### 2d. Dựng "não" (brain) — mặc định BẬT, KHÔNG HỎI
 
@@ -99,6 +102,25 @@ Xem [`brain/README.md`](brain/README.md) + [`brain/SETUP.md`](brain/SETUP.md).
 > (Docker, một CLI agent) hoặc **xin credential**. Mọi thứ khác — bật brain, dùng brain thế nào,
 > ghi file nào, có nên sync không — **tự quyết theo tài liệu này**. Bước 3–7 **LÀM LUÔN**:
 > "chạy INITIALIZATION" = đã đồng ý.
+
+### 2e. Chốt registry Sub Agents trên brain
+
+Nguồn sự thật là **Settings → Sub Agents** trên UI của brain vừa dựng:
+
+- Năm preset `Claude`, `Codex`, `OpenCode GO`, `OpenCode ZEN`, `Gemini CLI` **không có bảng model
+  hard-code**. Phải nhập API key (hoặc dùng key đã lưu), bấm xác thực và lấy danh sách model trực
+  tiếp từ provider; chỉ `Custom provider` được nhập model thủ công.
+- Registry độc lập với `sub-agents/mcp.md`. MCP không quyết định agent/model nào được dùng.
+- Credential mã hoá bằng secret của brain; API chỉ trả `credential_set`, không trả key. Slot preset
+  chỉ được bật/lưu với model còn nằm trong danh sách live và có `model_verified=true`. **Không**
+  chép credential vào file project, prompt, task spec, log hay report.
+- Nếu Bệ hạ **yêu cầu cấu hình sub-agent trong INITIALIZATION**, Alice mở tab này và cấu hình slot
+  được yêu cầu. Chỉ hỏi phần credential còn thiếu; không hỏi lại provider/model đã được Bệ hạ chốt.
+- Nếu Bệ hạ không yêu cầu, chỉ đọc các slot đang bật và `model_verified=true`; registry rỗng không
+  chặn INITIALIZATION.
+- Registry không tự đăng nhập CLI trên host. Slot chỉ được ghi vào `ALICE.project.md` sau khi CLI
+  tương ứng có thật, auth hợp lệ và một smoke task chạy được. Ghi **provider + model + vai trò +
+  lệnh verify**, tuyệt đối không ghi credential.
 
 ## Bước 3 — Tinh luyện repo → file instance
 
@@ -132,16 +154,37 @@ Nếu Bệ hạ muốn bật kiểm phủ sóng code→wiki: tạo `tools/verify
 
 > **KHÔNG chặn cả INIT để chờ LLM key.** Bước 3/4/7 agent tự làm bằng model của mình — **không cần** LLM của SAG. Chỉ **ingest** mới cần LLM. Nếu SAG chưa có LLM key: làm xong 3/4/7 trước, rồi báo 1 lần: *"đặt LLM key ở Settings → Models rồi chạy `npm run sync`"* — coi ingest là next step, không đứng chờ.
 
+> **`npm run sync` trả về không có nghĩa extraction đã xong.** Lệnh chỉ đã gửi ingest; pipeline còn
+> chạy nền qua `pending/loading/extracting` rồi mới tới `ready`. Search có thể thấy index từng phần
+> trước lúc đó, nên search ra kết quả sớm **không phải** bằng chứng brain đã sẵn sàng.
+
 Khi đã có LLM:
 1. Copy `brain/brain.config.example` → `brain/brain.config`; điền API base + token/tên login + source `alice-knowledge`.
 2. `npm run sync` → **tự chạy verify trước** (dừng nếu còn ERROR), rồi ingest **chỉ** folder `knowledge/`.
-3. Đợi document **READY** → **smoke query** qua MCP (`list_sources`, `search`, `get_entity`): kết quả phải có evidence + trỏ về file thật.
-4. Sửa thử 1 file rồi chạy lại sync → xác nhận **không tạo document trùng** (`list_documents`).
-5. **Cắm brain vào agent — INIT TỰ LÀM.** Ghi cấu hình MCP **stdio-bridge** vào config của agent đang chạy INIT:
+3. **Cắm brain vào agent — INIT TỰ LÀM, trước khi smoke.** Nếu MCP `brain` đã có trong phiên thì dùng
+   thẳng. Nếu chưa có, ghi cấu hình MCP **stdio-bridge** vào config của agent đang chạy INIT:
    - **Codex:** `[mcp_servers.brain]` trong `~/.codex/config.toml`.
    - **Claude Code:** `claude mcp add` (hoặc `.mcp.json` của project).
    - **opencode/Gemini:** mục MCP tương ứng.
    Lệnh bridge **lấy từ `npm run mcp`** — tên container mang `BRAIN_ID` riêng của project này, **đừng gõ tay `alice-brain-api-1`** (tên đó là của bản cũ, gõ tay sẽ cắm nhầm vào brain của project khác). Ghi xong → **nhắc Bệ hạ RESTART agent**.
+   Restart là blocker thật duy nhất ở đoạn này. Sau restart, tiếp tục đúng Bước 5; **không chạy lại
+   INITIALIZATION từ đầu** và không dùng curl để thay cho smoke MCP.
+4. Qua MCP `list_sources` + `list_documents`, đối chiếu đúng source và đủ số file vừa ingest. Poll
+   tới khi **TẤT CẢ document của source đều `ready`**:
+   - `pending/loading/extracting` = còn chạy → tiếp tục theo dõi trong cùng lượt; có thể làm Bước 7
+     trong lúc chờ nhưng **không kết thúc lượt** chỉ để báo tiến độ.
+   - `failed/paused` = **FAIL**, đọc log và xử lý; không được nói "sẽ tự hoàn tất".
+   - Nếu cần cập nhật tiến độ vì chờ lâu, nói ngắn trạng thái rồi **tiếp tục làm**, không phát báo
+     cáo kết thúc và không nói "đã chạy đủ 7 bước".
+5. Chỉ sau khi tất cả `ready`, **smoke query qua MCP**:
+   - `search` một câu hỏi có dữ kiện đặc trưng của project → phải trả evidence đúng và citation trỏ
+     về file instance thật.
+   - `get_entity` một thực thể đã biết có trong tri thức vừa ingest → phải trả context đúng từ source
+     này. Kết quả trên graph đang extract dở không tính là pass.
+6. Ghi kết quả smoke thật vào digest khởi tạo trong `context/`, rồi chạy lại `npm run sync`. Đây là
+   phép thử đường **update**: `list_documents` phải cho thấy số document không tăng do file cũ bị
+   nhân đôi, và document vừa cập nhật phải trở lại `ready`. "Lần ingest đầu chưa thấy trùng" **không
+   phải** bằng chứng chống trùng.
 
 **Không báo "não sẵn sàng" khi chưa smoke.**
 
@@ -154,12 +197,20 @@ Khi đã có LLM:
 - [ ] **`ALICE.project.md` đã điền đủ 7 mục**, không còn `‹đặc tả khi init›` bỏ sót.
 - [ ] **Không sửa file template nào** (`ALICE.md`, `wiki/README.md`, `sub-agents/*`, `brain/*.md`).
 - [ ] **`npm run verify` → 0 ERROR.**
-- [ ] Setup advisor đã chạy: nêu hiện trạng sub-agents/MCP + đề xuất; cái nào cài thì đã test.
-- [ ] **Brain** (nếu bật): dựng + smoke query OK + sync lại **không trùng**; hoặc ghi rõ `brain = disabled` + fallback. `brain.config`/state/`.sag-data` đã gitignore.
+- [ ] Setup advisor đã chạy: registry Settings → Sub Agents đã được đọc/cấu hình theo yêu cầu; slot
+      ghi vào `ALICE.project.md` đã smoke bằng CLI thật; MCP nếu đề xuất có mục đích riêng và đã test.
+- [ ] **Brain** (nếu bật): đúng source + **tất cả document `ready`**, không có `failed/paused`; smoke
+      `search` + `get_entity` chạy **sau READY**; sync một file đã đổi và xác nhận số document không
+      tăng do trùng. Hoặc ghi rõ `brain = disabled` + fallback. `brain.config`/state/`.sag-data` đã gitignore.
 - [ ] Đã nhắc Bệ hạ: **xoá `knowledge/.git`** (nếu clone) và **commit `knowledge/` vào repo project** — từ v2 nâng cấp đi qua `tools/update.py`, không qua `git pull`.
 - [ ] **Không bịa**: mọi khẳng định có nguồn.
 
 Report theo format ở `ALICE.md` mục 8.
+
+Chỉ được ghi **INITIALIZATION PASS / đã chạy đủ 7 bước** khi toàn bộ checklist trên đạt. Extraction
+còn chạy là **IN PROGRESS**, không phải risk hậu kiểm và không phải việc "không cần ai làm gì":
+agent đang INIT vẫn phải theo dõi tới trạng thái cuối. Chỉ dừng cho Bệ hạ khi cần restart agent,
+credential, cài phần mềm, hoặc gặp lỗi thật không thể tự xử lý.
 
 ## Bước 7 — Bàn giao: xuất User Base Prompt (vibe) cho project
 

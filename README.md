@@ -7,7 +7,7 @@
 ### Biến bất kỳ AI coding agent nào thành cộng sự **kỷ luật · trung thực · có trí nhớ dài hạn** — *không bao giờ quên context.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.3.8-6E56CF)](VERSION)
+[![Version](https://img.shields.io/badge/version-2.4.2-6E56CF)](VERSION)
 [![Engine](https://img.shields.io/badge/engine-ALICE%20CORE-6E56CF)](https://github.com/blueberry-sensei/alice-core)
 [![Embedding](https://img.shields.io/badge/embedding-bge--m3%20(local)-2EA043)](https://huggingface.co/BAAI/bge-m3)
 [![Runtime](https://img.shields.io/badge/runtime-Docker-2496ED?logo=docker&logoColor=white)](#-cài-đặt)
@@ -184,8 +184,14 @@ npm run uninstall
 | `npm run sync` / `sync:rebuild` | Đẩy `knowledge/` vào não. `:rebuild` xoá sạch rồi nạp lại |
 | `npm run update:check` / `update` | Xem có bản template mới / nâng cấp template |
 | `npm run mcp` | In sẵn khối cấu hình MCP đúng cho brain của project này |
-| `npm run uninstall -- --yes` | Gỡ sạch Docker của brain này (container, volume, image, build cache). **Giữ** tri thức |
-| `npm run reset -- --yes` | XOÁ tri thức project rồi kéo lại template trắng |
+| `npm run uninstall:yes` | Gỡ sạch Docker của brain này (container, volume, image, build cache). **Giữ** tri thức |
+| `npm run uninstall:keep-cache` | Như trên nhưng **giữ** build cache dùng chung cả máy |
+| `npm run reset:yes` | XOÁ tri thức project rồi kéo lại template trắng |
+
+> **Vì sao mỗi cờ là một script riêng?** Trên **Windows PowerShell**, `npm` phân giải thành
+> `npm.ps1`; shim đó gọi `& node npm-cli.js $args` và PowerShell nuốt mất token `--`, nên
+> `npm run uninstall -- --yes` không bao giờ tới được script — lệnh cứ in lại hướng dẫn.
+> Cờ nào cần giá trị (`--ref`, `--config`) thì gọi thẳng `npm.cmd run … -- --ref v2.1.0`.
 
 ### Nâng cấp: hai lệnh, không phải một
 

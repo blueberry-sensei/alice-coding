@@ -6,6 +6,29 @@ Quy ước version: **semver**. MAJOR đổi = có breaking change bắt buộc 
 
 ---
 
+## 2.4.2 — Mỗi cờ một script npm (sửa lệnh `uninstall` vô dụng trên PowerShell)
+
+**Không breaking.** `npm run update` là đủ.
+
+Trên **Windows PowerShell**, `npm` phân giải thành `npm.ps1`; shim đó gọi
+`& $NODE_EXE $NPM_CLI_JS $args` và PowerShell **nuốt mất token `--`**. Hệ quả:
+`npm run uninstall -- --yes` chỉ tới npm dưới dạng `run uninstall --yes`, npm coi `--yes`
+là cờ của chính nó và **không** chuyển tiếp → script không bao giờ thấy `--yes`, nên chỉ in
+lại hướng dẫn xác nhận. Lệnh gỡ trở nên bất khả thi trên shell mặc định của Windows.
+
+Đã đo: `cmd.exe` và `npm.cmd run … -- --yes` đều truyền đúng; chỉ nhánh `npm.ps1` mất cờ.
+
+Lệnh mới (dùng được trên mọi shell):
+
+| Trước | Nay |
+| --- | --- |
+| `npm run uninstall -- --yes` | `npm run uninstall:yes` |
+| `npm run uninstall -- --yes --keep-cache` | `npm run uninstall:keep-cache` |
+| `npm run reset -- --yes` | `npm run reset:yes` |
+| `npm run sync -- --no-verify` | `npm run sync:no-verify` |
+
+Cờ **có giá trị** (`--ref`, `--config`) không gói thành script được — gọi `npm.cmd run update -- --ref v2.1.0`.
+
 ## 2.3.7 — Dọn hai dòng nhiễu trên WSL
 
 **Không breaking.**
@@ -67,7 +90,7 @@ Quy ước version: **semver**. MAJOR đổi = có breaking change bắt buộc 
   đều chạy trong distro.
 - **Bỏ trang checklist** (`localhost:8090`): app đã tự hướng dẫn, một service nữa chỉ tốn cổng.
 - Toàn bộ log của script chuyển sang tiếng Anh.
-- `npm run uninstall -- --yes` nay dọn cả image mồ côi và build cache (thêm `--keep-cache` để giữ).
+- `npm run uninstall:yes` nay dọn cả image mồ côi và build cache (`npm run uninstall:keep-cache` để giữ).
 
 ## 2.3.0 — Mỗi project một brain · kéo image thay vì clone source · secret ra khỏi repo
 
@@ -101,7 +124,7 @@ Ba vấn đề của bản cũ, cùng một gốc: stack bị ghim cứng vào *
 - **Bỏ trang checklist** (`localhost:8090`): app đã tự hướng dẫn, một service nữa chỉ tốn cổng.
 - **WSL: Node phải cài BÊN TRONG distro.** Docker nằm ở đó nên launcher chạy ở đó; Node trên
   Windows không dùng được. `npm run brain` nay dò trước và in lệnh cài thay vì chết giữa chừng.
-- `npm run uninstall -- --yes` nay dọn cả **image mồ côi** và **build cache** (bản cũ để lại vài
+- `npm run uninstall:yes` nay dọn cả **image mồ côi** và **build cache** (bản cũ để lại vài
   chục GB sau khi "gỡ"). Có project Docker khác trên máy thì thêm `--keep-cache`.
 
 ## 2.2.0 — LLM cấu hình một chỗ trên app, nhiều provider tự chuyển nhà, log ra file
@@ -155,7 +178,7 @@ Stack cũ clone engine retrieval từ repo của bên thứ ba. Từ bản này,
 
 | # | Việc | Cách làm |
 |---|---|---|
-| 1 | Dựng lại stack trên nguồn mới | `npm run uninstall -- --yes` rồi `npm run brain`. Launcher kéo image mới. **Dữ liệu não bị xoá** → phải `npm run sync:rebuild` sau đó. File tri thức là source-of-truth nên không mất gì. |
+| 1 | Dựng lại stack trên nguồn mới | `npm run uninstall:yes` rồi `npm run brain`. Launcher kéo image mới. **Dữ liệu não bị xoá** → phải `npm run sync:rebuild` sau đó. File tri thức là source-of-truth nên không mất gì. |
 | 2 | `.env` cũ có `SAG_PATH` | Xoá dòng đó khỏi `brain/stack/.env`. Nó không còn được đọc. Muốn build từ source trên máy thì dùng `ALICE_APP_PATH` / `ALICE_CORE_PATH`. |
 | 3 | Remote git trỏ tên cũ | Nếu bạn từng đặt `ALICE_TEMPLATE_REPO`, đổi sang `https://github.com/blueberry-sensei/alice-coding`. Không đặt gì thì mặc định đã đúng. |
 

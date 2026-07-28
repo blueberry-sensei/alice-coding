@@ -4,12 +4,12 @@
 
 # ALICE CODING
 
-### Bộ nhớ dài hạn và hệ điều hành làm việc cho AI coding agent.
+### Một bộ não đơn giản biến Agent thành một người cộng sự tuyệt vời.
 
 **Một sản phẩm của [Blueberry Sensei](https://github.com/blueberry-sensei).**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.4-6E56CF)](VERSION)
+[![Version](https://img.shields.io/badge/version-2.4.5-6E56CF)](VERSION)
 [![Engine](https://img.shields.io/badge/engine-ALICE%20CORE-6E56CF)](#alice-core-khác-rag-thường-ở-đâu)
 [![Embedding](https://img.shields.io/badge/embedding-bge--m3%20local-2EA043)](https://huggingface.co/BAAI/bge-m3)
 [![Runtime](https://img.shields.io/badge/runtime-Docker-2496ED?logo=docker&logoColor=white)](#4-cài-đặt)

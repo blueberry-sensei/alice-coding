@@ -6,6 +6,15 @@ Quy ước version: **semver**. MAJOR đổi = có breaking change bắt buộc 
 
 ---
 
+## 2.4.5 — Slogan của ALICE CODING
+
+**Không breaking.** `npm run update` là đủ.
+
+README dùng slogan chính thức: “Một bộ não đơn giản biến Agent thành một người cộng sự tuyệt vời.”
+Không có thay đổi runtime hay contract.
+
+---
+
 ## 2.4.4 — README theo hành trình người dùng
 
 **Không breaking.** `npm run update` là đủ.

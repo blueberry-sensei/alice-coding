@@ -29,7 +29,12 @@ flowchart TD
 
 ## Nguyên tắc bất di (đọc trước, tuân suốt)
 
-- **Không lười đọc.** Phải quét codebase tới **tầng sâu nhất** liên quan, không dừng ở thư mục gốc.
+- **Đọc sâu nhất có thể — đây là tiêu chí số một của INITIALIZATION.** Không lướt, không suy từ
+  tên file, không dừng ở thư mục gốc. Chuẩn "đủ sâu" được định nghĩa bằng số đo ở Bước 1, và
+  phải báo cáo bằng con số ở Bước 6. INITIALIZATION là **lần duy nhất** agent được phép tiêu
+  nhiều token để đọc cả repo; mọi phiên vibe sau đó sống bằng những gì tinh luyện được ở đây.
+  Đọc thiếu ở bước này không lộ ra ngay — nó lộ ra hàng tháng sau, dưới dạng agent trả lời sai
+  vì kho tri thức không có mục đó.
 - **Không ảo giác.** Mọi khẳng định về code phải verify từ **source hiện tại** và **cite `path:line#anchor`** (có anchor, để `verify.py` bắt được khi code trôi).
 - **Cái gì không chắc → ghi rõ "chưa xác minh"**, không bịa cho đủ.
 - **Trung thực về độ phủ.** Nếu chưa đọc hết, nói rõ đã đọc tới đâu và phần nào còn bỏ ngỏ.
@@ -45,14 +50,56 @@ flowchart TD
 
 ## Bước 1 — Quét codebase tới tầng sâu nhất
 
-Mục tiêu: lập **module map** thật.
+Mục tiêu: lập **module map** thật, và **không bỏ sót** tính năng · luật · workflow · ghi chú nào.
 
-1. Xác định **entry points** (routes, main, server bootstrap, handlers, jobs, migrations).
-2. Đi theo import/dependency để hiểu **data layer** (ORM/schema/model), **auth/permission**, **service/business logic**, **integration ngoài** (API, queue, storage, third-party).
-3. Nhóm code thành **module** theo ranh giới tự nhiên (payment, booking, auth, sync...). Với mỗi module ghi: path chính (`path:line#anchor`), contract vào/ra, data model, phụ thuộc, vùng rủi ro.
-4. Đọc `git log` (compact) để hiểu lịch sử & hotspot; đọc TODO/FIXME/known-issues.
+Làm theo **bốn lượt**, không nhảy cóc. Lượt sau chỉ bắt đầu khi lượt trước đã có danh sách.
 
-**Không** claim đã hiểu module khi chưa mở file thật của nó.
+### Lượt 1 — Kiểm kê (biết mình phải đọc bao nhiêu)
+
+Liệt kê **toàn bộ** file của repo (trừ `node_modules`, `dist`, `.git`, lockfile, asset nhị phân),
+phân loại thành: source · test · config/hạ tầng · tài liệu · script/CI · dữ liệu mẫu.
+Ghi lại **tổng số file từng nhóm** — đây là mẫu số của báo cáo độ phủ ở Bước 6. Chưa có con số
+này thì mọi câu "đã đọc kỹ" đều là cảm tính.
+
+### Lượt 2 — Bổ dọc từng tính năng (đây là chỗ "sâu")
+
+Với **mỗi tính năng người dùng thấy được**, đi hết chiều dọc, mở **file thật** ở từng tầng:
+
+```
+entry (route/CLI/job/event) → validation/auth → service/business logic
+   → data (query/ORM/migration) → side effect (queue/mail/webhook/storage)
+   → response/UI → test đang bảo vệ nó
+```
+
+Mỗi tầng ghi lại `path:line#anchor`. **Không** claim đã hiểu một tính năng khi còn tầng chưa mở.
+Không suy diễn hành vi từ tên hàm — đọc thân hàm. Gặp nhánh `if/else` mang luật nghiệp vụ, gặp
+`try/except` nuốt lỗi, gặp giá trị hard-code: ghi lại, đó chính là loại tri thức không có trong
+tài liệu nào.
+
+### Lượt 3 — Quét luật · workflow · ghi chú (không tính năng nào chứa những thứ này)
+
+Đọc **hết**, mỗi loại một lượt riêng:
+
+| Loại | Nơi tìm | Tinh luyện thành |
+|---|---|---|
+| **Luật** (rules) | `AGENTS.md`/`CLAUDE.md`/`.cursorrules`, CONTRIBUTING, lint/format/tsconfig/ruff, pre-commit hook, CODEOWNERS, ADR | `decisions/` (`D-XXXX`, bắt buộc có Nguồn) hoặc `ALICE.project.md` |
+| **Workflow** | script trong `package.json`/`Makefile`/`justfile`, CI (`.github/workflows`, `.gitlab-ci.yml`), Dockerfile/compose, script deploy/migrate/seed | trang `wiki/` riêng cho vận hành + mục 5 của `ALICE.project.md` |
+| **Ghi chú** (notes) | README các cấp, `docs/`, comment dài đầu file, TODO/FIXME/HACK/XXX, issue template, changelog cũ, `.env.example` | `wiki/` trang tương ứng; ghi chú về bẫy → `mistakes/` |
+| **Lịch sử** | `git log` compact, message của commit revert/hotfix, file bị sửa nhiều nhất | hotspot + `mistakes/` (chỉ khi có bằng chứng thật) |
+
+Mỗi mục đọc được phải đi tới **một dòng trong kho tri thức**, hoặc bị loại có lý do. Đọc rồi
+không ghi gì = coi như chưa đọc, vì phiên vibe sau không thấy được nó.
+
+### Lượt 4 — Gom thành module
+
+Nhóm code theo ranh giới tự nhiên (payment, booking, auth, sync…). Mỗi module ghi: path chính
+(`path:line#anchor`), contract vào/ra, data model, phụ thuộc, vùng rủi ro, test bao phủ tới đâu.
+
+### Sổ độ phủ (bắt buộc)
+
+Vừa đọc vừa giữ một sổ: **file đã đọc / tổng file** theo nhóm, **tính năng đã bổ dọc trọn vẹn**,
+và danh sách **phần cố ý bỏ qua kèm lý do**. Bước 6 sẽ hỏi đúng ba con số này. Không được làm
+tròn lên, không được ghi "đã đọc toàn bộ" khi chỉ mới đọc phần liên quan.
 
 ## Bước 2 — Setup advisor (DYNAMIC — tư vấn Bệ hạ)
 
@@ -122,11 +169,29 @@ Nguồn sự thật là **Settings → Sub Agents** trên UI của brain vừa d
   tương ứng có thật, auth hợp lệ và một smoke task chạy được. Ghi **provider + model + vai trò +
   lệnh verify**, tuyệt đối không ghi credential.
 
+> **Registry này được dùng lúc VIBE như thế nào** (nói rõ vì hay bị hiểu nhầm): brain **không**
+> chạy sub-agent hộ và **không** rót credential vào CLI. Nó là **sổ đăng ký**: nơi Bệ hạ chốt
+> slot nào bật, model nào đã xác thực. INITIALIZATION đọc sổ đó rồi **bake** kết quả vào
+> `ALICE.project.md` mục 7. Khi vibe, orchestrator đọc mục 7 — **không** gọi API brain để hỏi
+> lại — rồi tự gọi CLI trên máy bằng auth của chính CLI đó. Chi tiết ở
+> [`sub-agents/models-and-fallback.md`](sub-agents/models-and-fallback.md).
+
 ## Bước 3 — Tinh luyện repo → file instance
 
 > **Đây là nơi "trí tuệ" được front-load.** Brain **chỉ embedding folder `knowledge/`** (không index source code), nên chất lượng distill ở đây quyết định recall khi vibe. Chủ động lần `git log`/PR/issue/TODO để rút bài học thật.
 
+> **Tinh luyện càng nhiều càng tốt — nhưng là "nhiều tri thức", không phải "nhiều chữ".** Thước
+> đo: một agent chưa từng thấy repo này, chỉ đọc `knowledge/`, có trả lời được không. Vì vậy mỗi
+> trang phải có thứ **không đoán được từ tên file**: bất biến, contract chính xác, thứ tự bắt
+> buộc, chế độ hỏng, và bẫy. Chép lại chữ ký hàm thì vô dụng — source code đã có sẵn.
+>
+> Với **mỗi module**, tối thiểu phải trả lời được: nó nhận gì / trả gì (kiểu dữ liệu thật) ·
+> ai được gọi và với quyền nào · dữ liệu nằm ở bảng/collection nào · thao tác nào **không**
+> idempotent · lỗi thì hỏng tới đâu · chỗ nào từng vỡ trong `git log` · lệnh nào verify được nó.
+> Thiếu mục nào thì ghi "chưa xác minh" ở đúng mục đó, đừng bỏ trống lặng lẽ.
+
 - **`wiki/<module>.md`**: mỗi module 1 file theo [`wiki/_TEMPLATE.md`](wiki/_TEMPLATE.md), citation dạng `path:line#anchor`. Giữ **tree-shaking** (mỗi trang tự chứa).
+- **`wiki/<workflow>.md`**: build · test · migrate · deploy · release · seed dữ liệu — mỗi luồng vận hành một trang, ghi **lệnh thật đã chạy được**, thứ tự bước, và dấu hiệu hỏng. Đây là phần agent hay bịa nhất nếu không có tài liệu.
 - **`wiki/ROUTER.md`**: điền bảng **Router** (vùng→trang) + **Dictionary** (thuật ngữ→trang). **Mỗi trang wiki phải có đúng 1 dòng ở đây**, nếu không `verify.py` báo trang mồ côi.
 - **`mistakes/LOG.md`**: seed từ incident/TODO/known-issues/git đã phát hiện. Mỗi entry có ID `M-XXXX` + `Trạng thái` + đủ 6 phần. Chưa có gì thật thì **để trống — không bịa lỗi**.
 - **`decisions/LOG.md`**: seed các luật bền phát hiện được từ repo (convention bắt buộc trong CONTRIBUTING, quyết định ghi trong ADR, ràng buộc nghiệp vụ trong comment). ID `D-XXXX`, **bắt buộc có Nguồn** (`file:line` hoặc lời Bệ hạ). Không suy diễn sở thích của Bệ hạ khi chưa nghe Bệ hạ nói.
@@ -167,6 +232,10 @@ Khi đã có LLM:
    - **Claude Code:** `claude mcp add` (hoặc `.mcp.json` của project).
    - **opencode/Gemini:** mục MCP tương ứng.
    Lệnh bridge **lấy từ `npm run mcp`** — tên container mang `BRAIN_ID` riêng của project này, **đừng gõ tay `alice-brain-api-1`** (tên đó là của bản cũ, gõ tay sẽ cắm nhầm vào brain của project khác). Ghi xong → **nhắc Bệ hạ RESTART agent**.
+   **`npm run mcp` là lệnh của agent, không phải của Bệ hạ** — đừng bao giờ đưa nó vào next step
+   cho Bệ hạ. Bệ hạ chỉ biết `npm run brain` (khi cần vibe) và `npm run update` (khi cần bản mới).
+   MCP đã cắm sẵn từ bản cũ nhưng thiếu `-e SAG_MCP_ACTOR=…`? Agent **tự cập nhật lại config** rồi
+   nhắc restart — không hỏi, không giao việc đó cho Bệ hạ.
    Restart là blocker thật duy nhất ở đoạn này. Sau restart, tiếp tục đúng Bước 5; **không chạy lại
    INITIALIZATION từ đầu** và không dùng curl để thay cho smoke MCP.
 4. Qua MCP `list_sources` + `list_documents`, đối chiếu đúng source và đủ số file vừa ingest. Poll
@@ -190,6 +259,9 @@ Khi đã có LLM:
 
 ## Bước 6 — Tự kiểm & report
 
+- [ ] **Báo cáo độ phủ bằng SỐ** (sổ ở Bước 1): file đã đọc / tổng file theo nhóm · số tính năng
+      đã bổ dọc trọn vẹn / tổng số tính năng · số file luật · workflow · ghi chú đã quét. Kèm danh
+      sách **phần chưa đọc và vì sao**. Báo cáo không có ba con số này là **chưa xong Bước 6**.
 - [ ] Đã đọc `ALICE.md` + tài liệu project + config.
 - [ ] Module map dựng từ **source thật**, citation có `#anchor`; phần chưa chắc đã đánh dấu "chưa xác minh".
 - [ ] `wiki/<module>.md` tạo xong, mỗi trang tự chứa; **`wiki/ROUTER.md` có đủ dòng cho từng trang**.
@@ -237,6 +309,11 @@ Bạn là Alice, làm theo knowledge/ALICE.md + knowledge/ALICE.project.md trên
 [D] Kết thúc: chạy routine knowledge/brain/KNOWLEDGE.md — distill → PRUNE (gộp trùng,
     đánh SUPERSEDED) → `npm run verify` (phải 0 ERROR) →
     `npm run sync`. Report theo ALICE mục 8 (có mục "tri thức đã ghi").
+
+[E] Giao việc cho sub-agent (nếu có): lấy slot từ knowledge/ALICE.project.md mục 7, gọi qua
+    knowledge/sub-agents/base-prompt.md, rồi ghi lại bằng tool MCP `log_agent_task`
+    (agent + task + status; thêm model/token/cost nếu CLI có báo). Brain không nhìn thấy
+    sub-agent chạy ngoài máy — không khai thì việc đó không tồn tại trên trang Telemetry.
 
 ## NHIỆM VỤ
 <Bệ hạ chỉ cần điền việc cần làm ở đây>

@@ -6,6 +6,30 @@ Quy ước version: **semver**. MAJOR đổi = có breaking change bắt buộc 
 
 ---
 
+## 2.4.3 — Telemetry: token, chi phí và dấu vết tri thức
+
+**Không breaking.** `npm run update` rồi `npm run brain` để lấy image mới.
+
+Brain nay ghi lại **mọi request LLM** (token vào/ra, chi phí ước tính theo bảng giá LiteLLM,
+độ trễ, thành/bại) và **mọi lần agent lấy tri thức qua MCP**. Xem ở **Settings → Telemetry**.
+Dữ liệu nằm trong DB của brain, không gửi đi đâu; bản ghi cũ hơn 30 ngày tự xoá
+(`SAG_TELEMETRY_RETENTION_DAYS`), tắt hẳn bằng `SAG_TELEMETRY_ENABLED=false`.
+
+Người dùng **không phải làm gì thêm** ngoài `npm run update` + `npm run brain`. Hai việc dưới đây
+là của **agent**, ghi ra để agent biết:
+
+1. Lệnh bridge MCP nay kèm `-e SAG_MCP_ACTOR=<agent>` để telemetry biết ai đang tra cứu. Agent
+   tự lấy khối cấu hình bằng `npm run mcp` và tự ghi vào config của mình (INITIALIZATION Bước 5);
+   việc duy nhất của người dùng là **restart agent**. Nhãn này **chỉ để hiển thị**, không cấp
+   quyền gì — cấu hình cũ không có nhãn vẫn chạy, chỉ hiện tên chung `mcp-stdio`.
+2. Khi delegate cho sub-agent, agent gọi tool MCP `log_agent_task` — sub-agent chạy bằng CLI
+   **không** đi qua brain nên không tự hiện lên telemetry. Xem [`brain/TELEMETRY.md`](brain/TELEMETRY.md).
+
+`INITIALIZATION.md` cũng siết lại Bước 1/3/6: quét theo bốn lượt (kiểm kê → bổ dọc từng tính
+năng → quét luật/workflow/ghi chú → gom module) và **báo cáo độ phủ bằng số**.
+
+---
+
 ## 2.4.2 — Mỗi cờ một script npm (sửa lệnh `uninstall` vô dụng trên PowerShell)
 
 **Không breaking.** `npm run update` là đủ.

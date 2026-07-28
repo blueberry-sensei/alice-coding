@@ -18,7 +18,7 @@ Nơi chứa kiến thức, bài học, và **cách vận hành** khi Alice (agen
 | File | Nội dung |
 |---|---|
 | [base-prompt.md](base-prompt.md) | **Base prompt CHUẨN gọi sub-agent** — ép nạp đủ context project, dùng chung mọi lần gọi |
-| [models-and-fallback.md](models-and-fallback.md) | Contract Settings → Sub Agents, cách chọn model và fallback khi lỗi/hết quota |
+| [models-and-fallback.md](models-and-fallback.md) | Contract Settings → Sub Agents, **cách registry được dùng lúc vibe**, chọn model và fallback khi lỗi/hết quota |
 | [delegation-protocol.md](delegation-protocol.md) | Quy trình agent-agnostic: viết spec → chạy → review gate → kỷ luật token |
 | [spec-template.md](spec-template.md) | Template task-spec tái dùng (điền vào `## NHIỆM VỤ` của base-prompt) |
 | [mcp.md](mcp.md) | Tư vấn capability MCP tùy chọn (browser/docs/DB), không chứa cấu hình provider/model |

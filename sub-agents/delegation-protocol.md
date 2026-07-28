@@ -56,6 +56,23 @@ Cách bịt: bắt sub-agent **tự viết bài học ra file**, Alice đọc fi
 
 Bỏ bước này = task chưa hoàn thành, ngang với quên verify.
 
+## Bước 5b: Ghi telemetry một dòng (rẻ, và là thứ duy nhất còn lại sau phiên)
+
+Sau khi review xong, gọi tool MCP của brain:
+
+```
+log_agent_task(agent="<slot>", task="<một dòng>", status="done|failed",
+               model="<model đã chạy>", note="<lệnh verify + kết quả thật>")
+```
+
+Giao việc dài thì ghi `status="started"` lúc giao và ghi lại lúc xong. CLI có báo token/chi phí
+thì điền `input_tokens` / `output_tokens` / `cost_usd`; **không có thì để trống, đừng ước lượng** —
+bản ghi được đánh dấu `reported` chính vì nó là số do agent khai.
+
+Vì sao bắt buộc: sub-agent chạy trên máy **không đi qua brain**, nên đây là đường duy nhất để
+"ai đã làm gì qua ALICE" hiện ra ở Settings → Telemetry cạnh chi phí tinh luyện và dấu vết truy
+xuất tri thức. Xem [`../brain/TELEMETRY.md`](../brain/TELEMETRY.md).
+
 ## Red flags khi review diff sub-agent
 
 - Đổi config bị cấm; thêm pattern mới thay vì theo pattern sẵn có; xoá/sửa file ngoài scope; "sửa" test cho pass thay vì sửa code; bịa API/endpoint; hardcode secret/giá trị; nuốt lỗi trả success.

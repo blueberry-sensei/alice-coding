@@ -467,16 +467,20 @@ function mcp() {
   const d = findDocker();
   const wsl = d && d.kind === "wsl";
   const cmd = wsl ? "wsl" : "docker";
-  const args = wsl
-    ? ["-e", "docker", "exec", "-i", `${brainEnv.brainId()}-api-1`, "python", "-m", "sag_api.mcp.server"]
-    : ["exec", "-i", `${brainEnv.brainId()}-api-1`, "python", "-m", "sag_api.mcp.server"];
+  // `-e SAG_MCP_ACTOR=<agent>` only labels the telemetry rows (Settings -> Telemetry) so the
+  // brain can tell which agent asked for what. It grants nothing; auth is still the JWT/scope.
+  const argsFor = (actor) => {
+    const base = ["exec", "-i", "-e", `SAG_MCP_ACTOR=${actor}`, `${brainEnv.brainId()}-api-1`, "python", "-m", "sag_api.mcp.server"];
+    return wsl ? ["-e", "docker", ...base] : base;
+  };
   console.log(C.b("MCP configuration for your agent (stdio bridge)\n"));
   console.log(C.d("Claude Code:"));
-  console.log(`  claude mcp add brain -- ${cmd} ${args.join(" ")}\n`);
+  console.log(`  claude mcp add brain -- ${cmd} ${argsFor("claude-code").join(" ")}\n`);
   console.log(C.d("Codex (~/.codex/config.toml):"));
-  console.log(`  [mcp_servers.brain]\n  command = "${cmd}"\n  args = ${JSON.stringify(args)}\n`);
+  console.log(`  [mcp_servers.brain]\n  command = "${cmd}"\n  args = ${JSON.stringify(argsFor("codex"))}\n`);
   console.log(C.d("Project .mcp.json:"));
-  console.log(JSON.stringify({ mcpServers: { brain: { command: cmd, args } } }, null, 2));
+  console.log(JSON.stringify({ mcpServers: { brain: { command: cmd, args: argsFor("mcp-client") } } }, null, 2));
+  console.log(C.d("\nSAG_MCP_ACTOR only labels telemetry rows - change it to whatever names the agent."));
   console.log(C.y("\nRESTART the agent after saving - agents do not hot-reload MCP."));
   return 0;
 }
@@ -560,7 +564,7 @@ const [cmd, ...rest] = process.argv.slice(2);
   uninstall remove Docker + brain runtime (KEEPS knowledge)   needs --yes
   reset     DELETE project knowledge + pull a fresh template  needs --yes
   verify    check the knowledge base   sync    push files into the brain
-  update    upgrade the template       mcp     print the MCP config for your agent
+  update    upgrade the template       mcp     print the MCP config (INITIALIZATION runs this itself)
 
 Via npm: npm run doctor | npm run brain | npm run verify | npm run sync
 Destructive: npm run uninstall:yes   |   npm run reset:yes

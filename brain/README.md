@@ -49,6 +49,7 @@ Enforce bằng **rules (ALICE.md) + vibe base-prompt + brain-qua-MCP + forcing f
 | [RETRIEVAL.md](RETRIEVAL.md) | Giao thức query não (funnel + `get_entity` + citation + fallback + proof-of-load) |
 | [SYNC.md](SYNC.md) | Đồng bộ file→não (chống trùng) + `--rebuild` |
 | [KNOWLEDGE.md](KNOWLEDGE.md) | Routine `/knowledge` — tự cải thiện tri thức |
+| [TELEMETRY.md](TELEMETRY.md) | Token/chi phí mọi request LLM + dấu vết agent lấy tri thức (Settings → Telemetry) |
 | [sync/sync.py](sync/sync.py) | Tool sync (Python, chỉ thư viện chuẩn) |
 | `brain.config.example` | Khung cấu hình → copy thành `brain.config` (đã gitignore) |
 

@@ -25,6 +25,30 @@ Credential lưu trong brain được mã hoá và API chỉ trả trạng thái 
 spec, log hay report. Registry cũng **không tự đăng nhập CLI**: CLI phải được xác nhận bằng chính cơ
 chế đăng nhập và smoke của nó.
 
+## Registry được dùng lúc VIBE như thế nào
+
+Đây là chỗ hay bị hiểu nhầm nhất, nên nói thẳng: **brain không chạy sub-agent hộ.** Nó không gọi
+CLI, không rót credential vào CLI, không "điều phối" agent. Settings → Sub Agents chỉ là **sổ
+đăng ký**: slot nào Bệ hạ bật, model nào đã xác thực với provider.
+
+Đường đi thật, theo thứ tự:
+
+1. **INITIALIZATION** đọc sổ đăng ký trên UI → smoke CLI thật trên máy → **bake** kết quả vào
+   [`../ALICE.project.md`](../ALICE.project.md) mục 7 (provider · model · vai trò · lệnh verify).
+2. **Lúc vibe**, orchestrator đọc **mục 7 của `ALICE.project.md`** — không gọi API brain để hỏi
+   lại, và không tự suy ra từ thứ tự card trên UI.
+3. Đủ [ngưỡng delegate](README.md) → gọi CLI trên máy bằng [base-prompt chuẩn](base-prompt.md).
+   CLI dùng **auth của chính nó trên host** (`opencode auth login`, `gemini auth`…), không phải
+   credential trong brain. Credential trong brain chỉ để brain xác thực và lấy danh sách model.
+4. Xong → review `git diff` + mục `BÀI HỌC`, rồi **ghi lại một dòng telemetry**:
+   `log_agent_task(agent=…, task=…, status=done|failed, model=…, note=…)` qua MCP brain
+   (xem [`../brain/TELEMETRY.md`](../brain/TELEMETRY.md)). Sub-agent chạy ngoài máy không đi qua
+   brain, nên **không khai thì việc đó không tồn tại** trên trang Telemetry.
+
+Hệ quả phải nhớ: đổi slot trên UI **không** tự đổi hành vi của phiên vibe đang chạy — mục 7 mới
+là thứ agent đọc. Đổi xong thì cập nhật `ALICE.project.md`, hoặc chạy lại phần 2e của
+INITIALIZATION.
+
 ## Quy tắc chọn và fallback
 
 1. Chỉ giao việc cho slot đang **bật** trong Settings và đã smoke trên máy hiện tại.

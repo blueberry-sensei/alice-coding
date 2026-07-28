@@ -7,7 +7,7 @@
 ### Biến bất kỳ AI coding agent nào thành cộng sự **kỷ luật · trung thực · có trí nhớ dài hạn** — *không bao giờ quên context.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.2-6E56CF)](VERSION)
+[![Version](https://img.shields.io/badge/version-2.4.3-6E56CF)](VERSION)
 [![Engine](https://img.shields.io/badge/engine-ALICE%20CORE-6E56CF)](https://github.com/blueberry-sensei/alice-core)
 [![Embedding](https://img.shields.io/badge/embedding-bge--m3%20(local)-2EA043)](https://huggingface.co/BAAI/bge-m3)
 [![Runtime](https://img.shields.io/badge/runtime-Docker-2496ED?logo=docker&logoColor=white)](#-cài-đặt)
@@ -183,7 +183,7 @@ npm run uninstall
 | `npm run verify` / `verify:fix` | Soi sức khoẻ kho tri thức. `:fix` nắn citation trôi dòng |
 | `npm run sync` / `sync:rebuild` | Đẩy `knowledge/` vào não. `:rebuild` xoá sạch rồi nạp lại |
 | `npm run update:check` / `update` | Xem có bản template mới / nâng cấp template |
-| `npm run mcp` | In sẵn khối cấu hình MCP đúng cho brain của project này |
+| `npm run mcp` | In khối cấu hình MCP của brain này. **Agent tự chạy trong INITIALIZATION** — bạn chỉ cần nó khi muốn cắm lại tay |
 | `npm run uninstall:yes` | Gỡ sạch Docker của brain này (container, volume, image, build cache). **Giữ** tri thức |
 | `npm run uninstall:keep-cache` | Như trên nhưng **giữ** build cache dùng chung cả máy |
 | `npm run reset:yes` | XOÁ tri thức project rồi kéo lại template trắng |
@@ -260,8 +260,9 @@ Agent sẽ tự: **tinh luyện** repo → điền các file instance (`ALICE.pr
 <summary>Cắm MCP thủ công (chỉ khi cần — INITIALIZATION đã tự làm)</summary>
 
 stdio bridge — thêm vào config MCP của agent:
-- **Docker CE trong WSL** + agent Windows: `command:"wsl"`, `args:["-e","docker","exec","-i","<BRAIN_ID>-api-1","python","-m","sag_api.mcp.server"]`
-- **Docker Desktop / Linux / agent trong WSL:** `command:"docker"`, `args:["exec","-i","<BRAIN_ID>-api-1","python","-m","sag_api.mcp.server"]`
+- **Docker CE trong WSL** + agent Windows: `command:"wsl"`, `args:["-e","docker","exec","-i","-e","SAG_MCP_ACTOR=claude-code","<BRAIN_ID>-api-1","python","-m","sag_api.mcp.server"]`
+- **Docker Desktop / Linux / agent trong WSL:** `command:"docker"`, `args:["exec","-i","-e","SAG_MCP_ACTOR=claude-code","<BRAIN_ID>-api-1","python","-m","sag_api.mcp.server"]`
+- `SAG_MCP_ACTOR` chỉ là **nhãn hiển thị** ở Settings → Telemetry (agent nào đang tra cứu); bỏ đi vẫn chạy.
 - Hoặc HTTP: `http://localhost:8000/mcp/` + Bearer token. Chi tiết: [`brain/SETUP.md`](brain/SETUP.md) & [`sub-agents/mcp.md`](sub-agents/mcp.md).
 </details>
 

@@ -4,369 +4,497 @@
 
 # ALICE CODING
 
-### Biến bất kỳ AI coding agent nào thành cộng sự **kỷ luật · trung thực · có trí nhớ dài hạn** — *không bao giờ quên context.*
+### Bộ nhớ dài hạn và hệ điều hành làm việc cho AI coding agent.
+
+**Một sản phẩm của [Blueberry Sensei](https://github.com/blueberry-sensei).**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.3-6E56CF)](VERSION)
-[![Engine](https://img.shields.io/badge/engine-ALICE%20CORE-6E56CF)](https://github.com/blueberry-sensei/alice-core)
-[![Embedding](https://img.shields.io/badge/embedding-bge--m3%20(local)-2EA043)](https://huggingface.co/BAAI/bge-m3)
-[![Runtime](https://img.shields.io/badge/runtime-Docker-2496ED?logo=docker&logoColor=white)](#-cài-đặt)
-[![OS](https://img.shields.io/badge/OS-Windows%20·%20macOS%20·%20WSL-555)](#-cài-đặt)
-[![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)](brain/sync/sync.py)
+[![Version](https://img.shields.io/badge/version-2.4.4-6E56CF)](VERSION)
+[![Engine](https://img.shields.io/badge/engine-ALICE%20CORE-6E56CF)](#alice-core-khác-rag-thường-ở-đâu)
+[![Embedding](https://img.shields.io/badge/embedding-bge--m3%20local-2EA043)](https://huggingface.co/BAAI/bge-m3)
+[![Runtime](https://img.shields.io/badge/runtime-Docker-2496ED?logo=docker&logoColor=white)](#4-cài-đặt)
+[![OS](https://img.shields.io/badge/OS-Windows%20·%20WSL%20·%20macOS-555)](#4-cài-đặt)
 
-**[Tổng quan](#-tổng-quan)** · **[Kiến trúc](#️-kiến-trúc--công-nghệ)** · **[Cài đặt](#-cài-đặt)** · **[Dùng hằng ngày](#-dùng-hằng-ngày)** · **[Nâng cấp](#-nâng-cấp)** · **[Roadmap](#️-roadmap)**
+**[Alice là gì?](#1-alice-coding-là-gì)** ·
+**[Giải quyết vấn đề gì?](#2-alice-coding-giải-quyết-vấn-đề-gì)** ·
+**[Có gì bên trong?](#3-vì-sao-alice-coding-làm-được-chuyện-đó)** ·
+**[Cài đặt](#4-cài-đặt)** ·
+**[Lệnh vận hành](#5-cập-nhật-và-vận-hành)**
 
 </div>
 
 ---
 
-## ✨ Tổng quan
+## 1. Alice Coding là gì?
 
-AI coding agent rất mạnh, nhưng có một điểm chí mạng: **nó quên**. Hết session là mất ký ức; giữa session thì bị *auto-compact* cắt mất chi tiết; và nếu chỉ dựa vào "rule đủ mạnh + model đủ thông minh để tự nhớ đọc đúng file" thì sớm muộn cũng **sót context** → sửa lại lỗi cũ, phá contract, đi ngược quyết định đã chốt.
+**Alice Coding là một bộ khung giúp AI coding agent làm việc như một cộng sự lâu năm, thay vì
+một người mới mất trí nhớ sau mỗi cuộc trò chuyện.**
 
-**ALICE CODING** giải bài toán đó bằng ba lớp:
+Nó không phải model mới. Nó cũng không thay thế Codex, Claude Code, Gemini CLI hay OpenCode.
+Alice Coding đứng **xung quanh** những agent đó và cung cấp ba thứ chúng thường thiếu:
 
-1. **Bộ khung kỷ luật (file)** — tách *cách làm việc* (hiến pháp [`ALICE.md`](ALICE.md)) khỏi *kiến thức dự án* (6 trụ cột) khỏi *đặc tả project* ([`ALICE.project.md`](ALICE.project.md)).
-2. **Bộ não retrieval ([`brain/`](brain/README.md))** — lớp index **semantic + multi-hop** dựng trên [**ALICE CORE**](https://github.com/blueberry-sensei/alice-core), kéo ra **cả tri thức liên quan *gián tiếp***.
-3. **Forcing function ([`tools/verify.py`](tools/verify.py))** — lớp kiểm tra chạy **ngoài** context của model, gắn làm gate của `sync`. Đây là thứ giữ cho hai lớp trên **không degrade âm thầm** khi dùng lâu.
+1. **Một bộ nhớ dài hạn thuộc về project** — quyết định, lỗi từng gặp, kiến trúc, quy ước và bối
+   cảnh quan trọng được giữ lại qua nhiều ngày, nhiều session và nhiều agent.
+2. **Một quy trình làm việc có kỷ luật** — đọc trước khi sửa, kiểm chứng trước khi báo xong, ghi
+   lại bài học ngay khi nó xuất hiện.
+3. **Một bộ não tìm đúng ký ức khi cần** — agent không phải nhét toàn bộ lịch sử vào prompt; nó
+   chỉ lấy phần có liên quan, kèm đường dẫn để kiểm lại.
 
-> 🎭 Agent tự định danh là **Alice**, xưng **Nô tài**, gọi bạn là **Bệ hạ**. Một cộng sự tận tụy, thẳng thắn, không nịnh — và không bao giờ "báo xong khi chưa xong".
+Alice có tính cách riêng: thẳng thắn, không nịnh, không “báo xong cho đẹp”. Nhưng phần quan trọng
+không phải cách xưng hô. Phần quan trọng là **kỷ luật đó có cơ chế máy móc đứng phía sau**, không
+chỉ là vài dòng prompt mong model tự giác.
 
-### Được gì
+---
 
-| Năng lực | Ý nghĩa |
+## 2. Alice Coding giải quyết vấn đề gì?
+
+### Vibe coding nhanh, nhưng càng lâu càng dễ “thối não”
+
+Một project vibe coding thường bắt đầu rất đã:
+
+- Ngày đầu: agent viết nhanh, context còn ít, mọi thứ trông thông minh.
+- Tuần sau: quyết định nằm rải rác trong chat; agent mới không biết vì sao code được viết như vậy.
+- Vài tháng sau: cùng một bug bị sửa lại, contract cũ bị phá, một workaround bị tưởng là thiết kế
+  chính thức, còn người dùng phải kể lại toàn bộ lịch sử từ đầu.
+
+Đổi sang model lớn hơn chỉ giúp agent **suy luận tốt hơn với những gì nó đang thấy**. Nó không thể
+nhớ một quyết định chưa được đưa vào context, và cũng không thể kiểm chứng một điều chưa từng được
+ghi lại.
+
+Hậu quả quen thuộc:
+
+| Bạn nhìn thấy | Vấn đề thật phía dưới |
 |---|---|
-| 🧭 **Không sót context** | Retrieval multi-hop qua *event–entity*, có **tiêu chí dừng** rõ ràng thay vì "query vài lần rồi thôi". |
-| 🗣️ **Nhớ ý muốn của bạn** | Trụ cột [`decisions/`](decisions/README.md) ghi sở thích/quyết định của bạn **ngay trong turn** bạn nói ra, không đợi cuối phiên. |
-| 🧹 **Không thành bãi rác** | ID ổn định + trạng thái `SUPERSEDED`/`RESOLVED` + bước **prune** — tri thức được *sửa*, không chỉ *chồng thêm*. |
-| 🛡️ **Kỷ luật kiểm được bằng máy** | `verify.py` bắt citation chết, trang wiki mồ côi, entry sai format; `sync` **từ chối chạy** nếu kho hỏng. |
-| ⬆️ **Nâng cấp 1 lệnh** | `update.py` tách bạch template ↔ tri thức của bạn — pull bản mới không đụng một dòng nào bạn viết. |
-| 🔒 **Local-first & riêng tư** | Embedding `bge-m3` chạy **local**; dữ liệu não nằm trên máy bạn (SQLite + LanceDB). |
-| 🤝 **Đa agent** | Claude Code, Codex, Gemini, opencode… đều nói **MCP** → cùng một bộ não. Không hook riêng agent nào. |
+| “Sao nó lại hỏi câu này nữa?” | Ký ức chỉ nằm trong chat cũ. |
+| “Hôm qua sửa rồi, hôm nay lại phá.” | Không có bản ghi quyết định và sai lầm dùng chung. |
+| “Prompt dài kinh khủng mà vẫn sót.” | Nạp thật nhiều chữ không đồng nghĩa nạp đúng bằng chứng. |
+| “Agent bảo xong nhưng chạy thật thì chết.” | Không có gate độc lập buộc nó verify. |
+| “Mỗi agent hiểu project một kiểu.” | Claude, Codex, Gemini chưa dùng chung một nguồn sự thật. |
 
----
-
-## 🧠 Ba tiêu chí "khi vibe"
-
-<div align="center">
-
-| | Tiêu chí | Cơ chế | Ép bằng gì |
-|:-:|---|---|---|
-| **A** | **Tự động nạp ký ức** | Đầu task query não (MCP) + in *"ký ức đã nạp"* kèm số tool call & citation | proof-of-load + tiêu chí dừng |
-| **B** | **Sống sót qua auto-compact** | Sau khi bị tóm tắt → tự *rehydrate* từ file + re-query não | checkpoint digest có mục "đọc lại từ đây" |
-| **C** | **Tự chủ động cải thiện** | Ghi `decisions`/`mistakes` **theo turn**; cuối task distill → prune → sync | **`verify.py` làm gate của `sync.py`** |
-
-</div>
-
-Điểm mấu chốt: A/B/C đều là chỉ dẫn *nằm trong context* → đều có thể bị auto-compact xoá mất. Nên lớp cuối cùng phải sống **ngoài** context. Đó là `verify.py`, và nó chặn `sync` — chỗ nghẽn bắt buộc (không sync thì não không có tri thức mới). Kỷ luật thành bắt buộc mà vẫn **portable 100%**.
-
----
-
-## 🏛️ Kiến trúc & Công nghệ
-
-### Nguyên tắc: **index dẫn xuất** (file = source-of-truth)
+### Alice biến lịch sử rời rạc thành một vòng lặp có trí nhớ
 
 ```mermaid
 flowchart LR
-    subgraph SoT["📁 Nguồn sự thật — git, human-diff"]
-      P["wiki · mistakes · decisions<br/>context · changelog"]
-    end
-    subgraph Gate["🛡️ tools/verify.py"]
-      V["citation · router · format<br/>ID trùng · supersede · phình"]
-    end
-    subgraph Brain["🧠 Bộ não (ALICE CORE, chạy local)"]
-      direction TB
-      EMB["bge-m3 embedding"]
-      IDX["event · entity · hyperedge động"]
-      DB[("SQLite + LanceDB")]
-      EMB --- IDX --- DB
-    end
-    Agent(["🤖 Alice — Claude / Codex / Gemini / opencode"])
-
-    P --> Gate
-    Gate -- "sạch: sync.py (chống trùng)" --> Brain
-    Gate -. "hỏng: CHẶN sync" .-> P
-    Agent == "① MCP: search / grep / get_entity" ==> Brain
-    Brain == "② evidence + citation → path:line#anchor" ==> Agent
-    Agent -. "③ ghi tri thức mới (/knowledge)" .-> P
+    A["Agent nhận task"] --> B["Nạp ký ức liên quan"]
+    B --> C["Đọc source và thực hiện"]
+    C --> D["Chạy gate kiểm chứng"]
+    D --> E["Tinh luyện quyết định, lỗi và thay đổi"]
+    E --> F["Đồng bộ vào brain"]
+    F --> A
 ```
 
-- **Đọc qua MCP, ghi qua sync.** Agent chỉ *truy vấn* não (8 tool read-only). Việc *ghi* đi qua [`sync.py`](brain/sync/sync.py) — giữ map `file → document_id + sha256` nên **không bao giờ tạo document trùng**.
-- **Chỉ nuốt thư mục tri thức** đã chưng cất, **không** index source code thô.
-- **Kho hỏng thì không cho sync** — nhồi trang mồ côi/citation chết vào não làm recall *tệ đi*.
+Vòng lặp này giải quyết vấn đề theo cách rất đời thường:
 
-### Vì sao không dùng RAG thường
+- **Trước khi làm:** Alice tra lại những gì project đã biết.
+- **Trong khi làm:** Alice theo luật của project và giữ bằng chứng từ source thật.
+- **Trước khi báo xong:** công cụ kiểm tra chạy ngoài context của model.
+- **Sau khi làm:** chỉ phần tri thức đáng giữ mới được tinh luyện và đồng bộ.
 
-Dense RAG chấm điểm chunk theo độ giống vector → hay sót đúng thứ chỉ liên quan **gián tiếp**. [ALICE CORE](https://github.com/blueberry-sensei/alice-core) làm khác: mỗi chunk sinh **1 event** (một mệnh đề có nghĩa trọn vẹn) + **N entity** (điểm để mở rộng); lúc query, các event **join qua entity chung** để dựng *hyperedge động* → bung sang tri thức mà truy vấn gốc không hề nhắc tới.
+File Markdown vẫn là nguồn sự thật để con người đọc, review và lưu bằng Git. Brain chỉ là index
+dẫn xuất; nếu mất toàn bộ dữ liệu brain, có thể dựng lại từ file.
 
-Đúng thứ ta cần: hỏi "sửa hàm A" mà vẫn kéo ra được quyết định cũ về module B chỉ vì cả hai cùng chạm một entity.
+### Người dùng nhận được gì?
 
-### Sáu trụ cột tri thức
+| Năng lực | Lợi ích thực tế |
+|---|---|
+| **Nhớ quyết định dài hạn** | Không phải kể lại “ta đã chốt gì” ở mỗi session. |
+| **Nhớ lỗi từng mắc** | Agent thấy lại nguyên nhân và bằng chứng, không lặp đúng sai lầm cũ. |
+| **Sống qua auto-compact** | Context bị nén vẫn có checkpoint và brain để nạp lại. |
+| **Dùng chung giữa nhiều agent** | Đổi Codex sang Claude hay gọi sub-agent không làm mất trí nhớ project. |
+| **Không biến knowledge thành bãi rác** | Có trạng thái thay thế, giải quyết, retire và quy trình prune. |
+| **Không “xong giả”** | Kho tri thức hỏng thì sync bị chặn; runtime chưa chạy thì phải nói là chưa chạy. |
 
-| Trụ cột | Trả lời câu hỏi | Cách chống phình |
-|---|---|---|
-| [`wiki/`](wiki/README.md) | Hệ thống **đang** ra sao? | sửa tại chỗ + tách trang |
-| [`mistakes/`](mistakes/README.md) | Alice **đã sai** gì? | `RESOLVED` / `SUPERSEDED` + gộp |
-| [`decisions/`](decisions/README.md) | Bệ hạ **muốn** thế nào? | `SUPERSEDED` / `RETIRED` |
-| [`context/`](context/README.md) | Phiên đó **diễn ra** thế nào? | 1 phiên 1 file, archive digest cũ |
-| [`changelog/`](changelog/README.md) | Code **đã đổi** gì? | append-only có chủ đích, giữ compact |
-| [`sub-agents/`](sub-agents/README.md) | Khi nào **giao việc** cho agent phụ? | (không phải kho tri thức) |
+---
+
+## 3. Vì sao Alice Coding làm được chuyện đó?
+
+### Kiến trúc: nguồn sự thật, gate và brain tách riêng
+
+```mermaid
+flowchart LR
+    subgraph Project["Project của bạn"]
+      Code["Source code"]
+      Knowledge["knowledge/<br/>wiki · decisions · mistakes<br/>context · changelog"]
+    end
+
+    subgraph Guard["Lớp kỷ luật"]
+      Rules["ALICE.md<br/>quy trình làm việc"]
+      Verify["verify<br/>citation · format · router · ID"]
+    end
+
+    subgraph Brain["ALICE BRAIN chạy local"]
+      Core["ALICE CORE<br/>semantic + multi-hop retrieval"]
+      Data[("SQLite + LanceDB")]
+      Embed["bge-m3 local"]
+    end
+
+    Agents["Codex · Claude · Gemini<br/>OpenCode · agent khác"]
+
+    Code --> Agents
+    Knowledge --> Verify
+    Rules --> Agents
+    Verify -- "PASS mới được sync" --> Core
+    Core --- Data
+    Core --- Embed
+    Agents <-- "MCP + citation" --> Core
+    Agents --> Knowledge
+```
+
+Điểm thiết kế quan trọng:
+
+- **Knowledge là tài sản của project**, nằm cùng code và đọc được bằng mắt thường.
+- **Brain không phải nguồn sự thật.** Nó là bản tăng tốc để tìm đúng tri thức.
+- **Agent đọc qua MCP, ghi qua file rồi sync.** Không có đường ghi tự do làm brain phình âm thầm.
+- **`verify` đứng ngoài context của model.** Agent không thể “quên” gate chỉ vì prompt bị compact.
+
+### ALICE CORE khác RAG thường ở đâu?
+
+Vector search thông thường giỏi tìm đoạn có từ ngữ hoặc ý nghĩa gần câu hỏi. Nhưng trong codebase,
+thứ cứu một task nhiều khi lại là quan hệ gián tiếp:
+
+> Hàm đang sửa không nhắc đến chính sách bảo mật, nhưng cả hai cùng liên quan đến một loại token,
+> một endpoint hoặc một quyết định kiến trúc cũ.
+
+ALICE CORE tách tri thức thành các **event có nghĩa trọn vẹn** và các **entity liên quan**. Khi
+truy vấn, nó có thể mở rộng qua entity chung để tìm thêm sự kiện liên quan, thay vì chỉ lấy vài
+chunk gần nhất rồi dừng.
+
+Nói đơn giản: Alice không chỉ hỏi *“đoạn nào giống câu này?”* mà còn hỏi
+*“những chuyện nào nối với chuyện này, và nối qua đâu?”*
+
+### Multi-model routing: không đặt cả project lên một API key
+
+Trong **Settings → Models**, người dùng xếp nhiều provider/model theo thứ tự ưu tiên. Chuỗi này
+được dùng cho cả đường trả lời và đường trích xuất tri thức.
+
+| Khi provider gặp lỗi | Alice xử lý |
+|---|---|
+| Timeout hoặc lỗi tạm thời | Thử lại có giới hạn trên cùng provider. |
+| `429` hoặc hết quota | Cooldown provider đó rồi chuyển sang provider kế tiếp. |
+| Credential/model không dùng được | Loại provider lỗi khỏi lượt chạy thay vì lặp vô ích. |
+| Request sai contract | Dừng và báo lỗi thật; không đổi nhà để che bug. |
+
+Embedding là ngoại lệ có chủ đích: **không tự đổi model embedding giữa chừng**. Hai model tạo hai
+không gian vector khác nhau; trộn chúng trong một index làm retrieval sai nhưng rất khó phát hiện.
+Alice thà fail rõ ràng còn hơn âm thầm làm hỏng dữ liệu.
+
+### Multi-agent: nhiều người làm, một bộ nhớ
+
+Mọi agent hỗ trợ MCP đều có thể tra cùng một brain:
+
+- Codex có thể đọc quyết định do Claude ghi lại.
+- Agent chính có thể giao một phần việc cho sub-agent rồi thu hồi kết quả về cùng context.
+- Mỗi lần agent gọi tool tri thức đều có actor, câu hỏi, kết quả và citation để truy vết.
+
+**Settings → Sub Agents là registry**, không phải dịch vụ chạy agent hộ. Nó lưu slot
+provider/model đã được xác thực; orchestrator vẫn gọi CLI bằng phiên đăng nhập của chính CLI đó.
+Credential không được chép vào prompt hay project.
+
+### Telemetry: biết AI đã làm gì và tốn bao nhiêu
+
+**Settings → Telemetry** cho thấy:
+
+- request LLM nào đã chạy, qua model/provider nào;
+- token vào/ra, độ trễ, thành công hay thất bại;
+- chi phí ước tính khi có bảng giá; chưa biết giá thì ghi **unknown**, không giả vờ bằng `0`;
+- agent nào đã tra tri thức, gọi tool gì và lấy những citation nào;
+- lần delegate sub-agent nào đã được orchestrator khai báo.
+
+Telemetry được bắt tại lớp gọi model dùng chung, nên không chỉ thấy chat mà còn thấy đường
+trích xuất chạy bên trong ALICE CORE. Embedding có usage sink riêng vì không đi qua cùng lớp đó.
+
+### Local-first, nhưng không tự dối mình về quyền riêng tư
+
+- Embedding `bge-m3`, SQLite và LanceDB chạy local trong Docker.
+- Mỗi project có `BRAIN_ID`, container, network và volume riêng.
+- API key được mã hoá AES-GCM trước khi lưu; khoá gốc nằm ngoài repo.
+- Knowledge không gửi đi đâu ngoài provider LLM mà **bạn chủ động cấu hình**.
+- Brain là ứng dụng single-user local; không nên mở cổng trực tiếp ra Internet.
 
 ### Bộ công nghệ
 
-| Lớp | Công nghệ |
+| Lớp | Công nghệ / vai trò |
 |---|---|
-| Retrieval engine | **ALICE CORE** / `alicecore` (MIT, Python 3.11+) |
-| Embedding (local) | **BAAI/bge-m3** phục vụ qua Ollama (OpenAI-compatible) |
-| LLM (extract/rerank) | Cấu hình trong app — **AIStudio/Gemini free**, OpenRouter, hoặc local |
-| Lưu trữ | SQLite + LanceDB (bind-mount, gitignore) |
-| Giao tiếp agent | **MCP** (Streamable HTTP) + REST |
-| Orchestration | **Docker Compose** (ALICE api+web + embedding) |
-| Tooling | **Python, chỉ thư viện chuẩn** — `tools/verify.py`, `tools/update.py`, `brain/sync/sync.py` |
+| Framework | Markdown + Python standard library |
+| Retrieval engine | ALICE CORE, Python 3.11+ |
+| Web app | Next.js |
+| API | FastAPI |
+| Model gateway | LiteLLM + provider chain |
+| Embedding | BAAI/bge-m3 qua Ollama, chạy local |
+| Dữ liệu | SQLite + LanceDB |
+| Agent protocol | MCP (stdio hoặc Streamable HTTP) |
+| Runtime | Docker Compose |
+| Integrity gate | `verify` + manifest SHA-256 + sync chống trùng |
+
+### Benchmark và bằng chứng
+
+Nói thẳng: **ALICE CODING chưa công bố benchmark retrieval chuẩn hoá** như Recall@K, MRR hay
+NDCG trên một dataset public. Vì vậy README này không lấy số của model embedding rồi gọi đó là
+“benchmark của Alice”.
+
+Những gì có thể tự kiểm ngay hôm nay:
+
+| Tuyên bố | Cách kiểm |
+|---|---|
+| Kho tri thức không hỏng cấu trúc | `npm run verify` phải trả `0 ERROR`. |
+| File sửa không tạo document trùng | `npm run sync` dùng map file + SHA-256 để update đúng document. |
+| Stack thực sự chạy | `npm run brain` chỉ kết thúc thành công khi API healthy. |
+| Provider nào fail, vì sao đổi nhà | Xem lịch sử gọi và Telemetry trên app. |
+| Hai project không dùng nhầm brain | `npm run brain:list` cho thấy identity, cổng và stack riêng. |
+| Template mới không ghi đè tri thức riêng | `npm run update:dry` cho xem trước từng thay đổi. |
+
+Thông số chính thức của riêng `bge-m3` nằm trong
+[model card của BAAI](https://huggingface.co/BAAI/bge-m3). Benchmark end-to-end của Alice sẽ chỉ
+được công bố khi có dataset, cách chấm và script tái lập công khai.
 
 ---
 
-## 🚀 Cài đặt
+## 4. Cài đặt
 
-> **TL;DR — 3 bước là có app xài.**
->
-> **🪟 Windows / PowerShell:**
-> ```powershell
-> git clone https://github.com/blueberry-sensei/alice-coding.git knowledge; Remove-Item -Recurse -Force knowledge\.git
-> ```
->
-> **🍎🐧 macOS / Linux / WSL:**
-> ```bash
-> git clone https://github.com/blueberry-sensei/alice-coding.git knowledge && rm -rf knowledge/.git
-> ```
->
-> Rồi **một lệnh** cho mọi hệ (launcher tự chọn script đúng môi trường):
-> ```bash
-> npm run brain
-> ```
-> Trên **WSL**, launcher sẽ **stream log và GIỮ chạy** — **đừng đóng cửa sổ đó**. *(mac/Linux/Docker Desktop: chạy xong tự thoát.)* Không có Node? Xem [lệnh gốc](#-cài-đặt) trong mục chi tiết bên dưới.
->
-> Rồi mở `http://localhost:3000` → **Settings → Models** → thêm provider LLM (key Gemini free là đủ). **Xong.**
->
-> Để agent dùng não: chạy **INITIALIZATION** (Bước 4) — agent tự nạp kiến thức repo + **tự cắm MCP**, rồi bạn **restart agent**.
+### Yêu cầu chung
 
-> ⚠️ **Xoá `knowledge/.git` sau khi clone** rồi **commit `knowledge/` vào repo project của bạn**. Tri thức là tài sản của project. Từ v2, nâng cấp template đi qua `npm run update` chứ **không** qua `git pull` — nên không cần repo lồng repo nữa.
+- Node.js **18+**.
+- Git.
+- Python **3.9+** cho verify, sync và update.
+- Docker đang chạy.
+- Khoảng **6–8 GB** trống cho image và model embedding.
+- Một API key LLM; embedding local đã được đóng gói sẵn.
 
-### 🟢 Có Node? Dùng lệnh npm cho gọn
+> Clone Alice Coding vào thư mục `knowledge/` của project, xoá Git history lồng bên trong, rồi
+> commit `knowledge/` cùng project. Từ đó về sau nâng cấp bằng `npm run update`, không dùng
+> `git pull` trong `knowledge/`.
 
-Lớp vỏ npm **không có dependency nào** — nó chỉ dò môi trường (Docker Desktop / Docker CE trong WSL / mac / Linux), tìm đúng Python, rồi gọi launcher + script Python thật. Không có Node vẫn dùng được 100% bằng lệnh gốc.
+### Windows + Docker Desktop
 
-```bash
-npm install
-```
+Mở **PowerShell** tại thư mục project:
 
-```bash
+```powershell
+git clone https://github.com/blueberry-sensei/alice-coding.git knowledge
+Remove-Item -Recurse -Force knowledge\.git
+Set-Location knowledge
 npm run doctor
-```
-
-```bash
 npm run brain
 ```
 
-```bash
-npm run uninstall
-```
+Launcher dùng Docker Desktop, tự tạo secret ngoài repo, tự cấp cổng trống và in URL chính xác.
+Project đầu tiên thường là `http://localhost:3000`; project tiếp theo có thể dùng cổng khác.
 
-| Lệnh | Làm gì |
-|---|---|
-| `npm run doctor` | Kiểm môi trường: Docker, Node, API, LLM, kho tri thức. **Chạy đầu tiên và mỗi khi thấy lạ.** |
-| `npm run brain` | Dựng/khởi động brain của project này. Cũng là lệnh **kéo bản app mới** về. |
-| `npm run brain:status` | Brain của project này: chế độ, cổng thật, container còn sống không |
-| `npm run brain:list` | **Mọi** brain trên máy — id, cổng, cái nào đang chạy |
-| `npm run brain:down` / `:restart` / `:logs` | Tắt / khởi động lại / xem log |
-| `npm run brain:pull` | Kéo lại model embedding nếu lần đầu bị lỗi mạng |
-| `npm run verify` / `verify:fix` | Soi sức khoẻ kho tri thức. `:fix` nắn citation trôi dòng |
-| `npm run sync` / `sync:rebuild` | Đẩy `knowledge/` vào não. `:rebuild` xoá sạch rồi nạp lại |
-| `npm run update:check` / `update` | Xem có bản template mới / nâng cấp template |
-| `npm run mcp` | In khối cấu hình MCP của brain này. **Agent tự chạy trong INITIALIZATION** — bạn chỉ cần nó khi muốn cắm lại tay |
-| `npm run uninstall:yes` | Gỡ sạch Docker của brain này (container, volume, image, build cache). **Giữ** tri thức |
-| `npm run uninstall:keep-cache` | Như trên nhưng **giữ** build cache dùng chung cả máy |
-| `npm run reset:yes` | XOÁ tri thức project rồi kéo lại template trắng |
+### Windows + WSL + Docker CE
 
-> **Vì sao mỗi cờ là một script riêng?** Trên **Windows PowerShell**, `npm` phân giải thành
-> `npm.ps1`; shim đó gọi `& node npm-cli.js $args` và PowerShell nuốt mất token `--`, nên
-> `npm run uninstall -- --yes` không bao giờ tới được script — lệnh cứ in lại hướng dẫn.
-> Cờ nào cần giá trị (`--ref`, `--config`) thì gọi thẳng `npm.cmd run … -- --ref v2.1.0`.
-
-### Nâng cấp: hai lệnh, không phải một
-
-`npm run update` chỉ chép **file template** (`knowledge/`) — nó không biết gì về Docker. Bản
-**ứng dụng** nằm trong image, và image chỉ được kéo về khi dựng lại:
+Mở terminal **bên trong WSL**. Nên để project trong filesystem WSL như `~/projects/...`, không đặt
+ở `/mnt/c/...` nếu muốn I/O nhanh:
 
 ```bash
-npm run update && npm run brain
+git clone https://github.com/blueberry-sensei/alice-coding.git knowledge
+rm -rf knowledge/.git
+cd knowledge
+npm run doctor
+npm run brain
 ```
 
-Lệnh đầu cập nhật khung tri thức và in ra việc phải làm tay (nếu có); lệnh sau kéo image mới rồi
-khởi động lại. Chỉ chạy `npm run update` thì khung mới nhưng app vẫn là bản cũ.
+Node phải có trong WSL; launcher có thể tự cài bản local khi thiếu, không cần sudo. Nếu Windows
+không mở được `localhost`, dùng URL theo IP distro mà launcher in ở dòng cuối.
 
-**`npm run doctor` là lệnh nên chạy đầu tiên và mỗi khi thấy lạ** — nó nói thẳng cái gì thiếu và sửa thế nào.
+### macOS + Docker Desktop
 
-### Yêu cầu
-- **Docker** (Docker Desktop, hoặc Docker Engine/CE trong WSL) đang chạy.
-- **Node 18+** — bắt buộc: launcher dùng nó để tính danh tính brain và cấp cổng.
-- **Git** và **Python 3.9+** (cho `verify` / `sync` / `update`; bạn không phải gõ lệnh Python nào).
-- ~**6–8GB** trống (image app + model `bge-m3`).
-- Một **API key LLM free** — khuyên [AIStudio/Gemini](https://aistudio.google.com/apikey).
-- *(Tùy chọn, để chạy INITIALIZATION)* **Claude Desktop** hoặc **Codex Desktop**.
-
-### Bước 1 — Lấy source (vào repo project của bạn)
-
-🪟 **PowerShell:**
-```powershell
-git clone https://github.com/blueberry-sensei/alice-coding.git knowledge; Remove-Item -Recurse -Force knowledge\.git
-```
-
-🍎🐧 **macOS / Linux / WSL:**
-```bash
-git clone https://github.com/blueberry-sensei/alice-coding.git knowledge && rm -rf knowledge/.git
-```
-
-### Bước 2 — Khởi động bằng **1 lệnh**, mọi hệ điều hành như nhau
+Mở Terminal tại thư mục project:
 
 ```bash
-cd knowledge && npm run brain
+git clone https://github.com/blueberry-sensei/alice-coding.git knowledge
+rm -rf knowledge/.git
+cd knowledge
+npm run doctor
+npm run brain
 ```
 
-Launcher tự dò môi trường (Docker Desktop / Docker Engine trong WSL / macOS / Linux), tự cấp cổng
-trống, kéo image ALICE dựng sẵn về và chạy **nền**. Không cần source, không cần sửa file cấu hình,
-không phải giữ cửa sổ terminal — kể cả trên WSL.
+Docker Desktop phải chạy trước. Launcher sử dụng container Linux giống Windows; dữ liệu brain
+nằm trong Docker volume, còn secret nằm trong state directory của user.
 
-Xong, nó in ra đúng địa chỉ kèm cổng đã cấp.
+### Hoàn tất cấu hình trên app
 
-> 💡 **WSL:** chạy lệnh trong terminal WSL (Docker nằm trong đó). Nên để project trong filesystem
-> của WSL (`~/…`) thay vì `/mnt/d/…` cho nhanh.
+1. Mở URL launcher vừa in.
+2. Vào **Settings → Models**, thêm provider/model và API key.
+3. Tạo một source thử để chắc embedding và LLM đều chạy.
+4. Mở coding agent trong project và yêu cầu:
 
-### Bước 3 — Cấu hình LLM ngay trên app
-Mở địa chỉ mà launcher vừa in ra (mặc định **http://localhost:3000**):
-1. Mở **http://localhost:3000** → nhập tên tạo danh tính (vd `Alice`).
-2. **Settings → Models** → thêm provider: key **AIStudio/Gemini** (hoặc OpenRouter). ✅ *Embedding `bge-m3` đã chạy sẵn.*
-3. Tạo 1 source thử + thêm text + search → xác nhận embedding & LLM chạy.
+> Đọc và chạy `knowledge/INITIALIZATION.md`.
 
-App là **nơi duy nhất** cấu hình LLM — `.env` không còn biến `SAG_LLM_*`. Thêm được nhiều provider theo thứ tự ưu tiên: hết quota hay sai key thì hệ thống tự chuyển nhà và ghi rõ lý do trong **lịch sử gọi**. Key được mã hoá trước khi lưu nên không có gì để commit nhầm. Chi tiết: [brain/SETUP.md](brain/SETUP.md).
-
-### Bước 4 — Chạy INITIALIZATION (agent tự làm phần còn lại)
-Mở agent (Codex/Claude) trong repo project và bảo:
-> *"Đọc và chạy `knowledge/INITIALIZATION.md`."*
-
-Agent sẽ tự: **tinh luyện** repo → điền các file instance (`ALICE.project.md`, `wiki/ROUTER.md`, các trụ cột) → chạy `verify` → nạp vào não → **tự ghi config MCP `brain`** → in ra **vibe base-prompt**. Việc duy nhất của bạn sau đó: **restart agent**.
-
-<details>
-<summary>Cắm MCP thủ công (chỉ khi cần — INITIALIZATION đã tự làm)</summary>
-
-stdio bridge — thêm vào config MCP của agent:
-- **Docker CE trong WSL** + agent Windows: `command:"wsl"`, `args:["-e","docker","exec","-i","-e","SAG_MCP_ACTOR=claude-code","<BRAIN_ID>-api-1","python","-m","sag_api.mcp.server"]`
-- **Docker Desktop / Linux / agent trong WSL:** `command:"docker"`, `args:["exec","-i","-e","SAG_MCP_ACTOR=claude-code","<BRAIN_ID>-api-1","python","-m","sag_api.mcp.server"]`
-- `SAG_MCP_ACTOR` chỉ là **nhãn hiển thị** ở Settings → Telemetry (agent nào đang tra cứu); bỏ đi vẫn chạy.
-- Hoặc HTTP: `http://localhost:8000/mcp/` + Bearer token. Chi tiết: [`brain/SETUP.md`](brain/SETUP.md) & [`sub-agents/mcp.md`](sub-agents/mcp.md).
-</details>
-
-<details>
-<summary><b>🛟 Gỡ rối nhanh</b></summary>
-
-| Triệu chứng | Xử lý |
-|---|---|
-| Document **FAILED** khi extract | Chưa có provider LLM, hoặc model không phát JSON schema → thêm provider ở **Settings → Models**; xem **lịch sử gọi** để biết nhà nào fail vì gì. |
-| Search rỗng / embedding lỗi | `npm run brain:logs`; embedding không tự đổi nhà (đổi model = đổi không gian vector) nên nó báo lỗi thẳng và để document FAILED. |
-| `brain-up` báo `ALICE_APP_PATH sai` | Chỉ xảy ra khi bạn tự đặt biến đó. Bỏ nó đi để dùng image dựng sẵn, hoặc trỏ đúng thư mục chứa `apps/api`. |
-| `sync` **dừng, báo ERROR** | Kho tri thức hỏng — đó là gate làm đúng việc. `npm run verify` xem chi tiết, `npm run verify:fix` nắn citation trôi dòng. |
-| `sync` báo **sai schema state** | `npm run sync:rebuild` (an toàn, file là source-of-truth). |
-| Đổi embedding model | `npm run sync:rebuild`. |
-| Lỗi `\r` khi chạy `.sh` trong WSL | Đã có `.gitattributes` ép LF; nếu vẫn dính, `dos2unix` file `.sh`. |
-
-Chi tiết vận hành: [`brain/stack/README.md`](brain/stack/README.md).
-</details>
+Agent sẽ quét repo, tinh luyện knowledge, chạy gate, sync vào brain và tự cắm MCP. Khi agent yêu
+cầu, restart agent một lần để config MCP mới có hiệu lực.
 
 ---
 
-## 🧭 Dùng hằng ngày
+## 5. Cập nhật và vận hành
 
-Sau khi init, mỗi task chỉ cần dán **vibe base-prompt** (INITIALIZATION in ra) rồi điền việc ở `## NHIỆM VỤ`. Alice sẽ tự:
+### `update` và `brain` là hai việc khác nhau
 
-**[A]** nạp ký ức đầu task → làm theo [quy trình 5 bước](ALICE.md#4-quy-trình-5-bước-tự-hành) → **[C]** ghi `decisions`/`mistakes` **ngay trong turn** phát sinh, cuối task thì distill + prune + verify + sync; và **[B]** tự rehydrate nếu bị auto-compact.
+| Lệnh | Nó cập nhật gì? | Khi nào dùng? |
+|---|---|---|
+| `npm run update` | Framework/template trong `knowledge/` | Khi Alice Coding có version mới. |
+| `npm run brain` | Image ứng dụng ALICE BRAIN/CORE rồi khởi động stack | Khi muốn chạy brain hoặc lấy app image mới. |
 
-Hai lệnh bạn nên biết:
-
-```bash
-npm run verify:fix   # kiểm & nắn kho tri thức
-npm run sync         # đồng bộ file → não (tự verify trước)
-```
-
-📚 Đọc thêm: [`ALICE.md`](ALICE.md) (hiến pháp) · [`ALICE.project.md`](ALICE.project.md) (đặc tả project) · [`brain/RETRIEVAL.md`](brain/RETRIEVAL.md) (giao thức query) · [`brain/KNOWLEDGE.md`](brain/KNOWLEDGE.md) (routine tự cải thiện) · [`UPGRADE.md`](UPGRADE.md).
-
----
-
-## ⬆️ Nâng cấp
+Khi có một bản phát hành đầy đủ, chạy **hai bước riêng**:
 
 ```bash
 npm run update
+npm run brain
 ```
 
-Một lệnh, không conflict. Ranh giới sở hữu là tuyệt đối:
+`update` không khởi động Docker. `brain` không viết lại template. Tách hai việc giúp người dùng
+thấy rõ phần nào đang thay đổi và lỗi nằm ở đâu.
 
-| Chủ sở hữu | Gồm gì | `update` làm gì |
-|---|---|---|
-| **TEMPLATE** | `ALICE.md`, `INITIALIZATION.md`, `tools/`, `brain/`, `sub-agents/`, các `README`/`_TEMPLATE` | **ghi đè** (nếu bạn chưa sửa tay) |
-| **INSTANCE** | `ALICE.project.md`, `wiki/ROUTER.md`, `wiki/<module>.md`, `mistakes/LOG.md`, `decisions/LOG.md`, `context/`, `changelog/`, `brain.config` | **không bao giờ chạm** |
+### Danh mục lệnh npm
 
-Đã sửa tay một file template? `update` **không** ghi đè — nó để bản mới ở `<file>.new` cho bạn gộp. Chi tiết + rollback + hướng dẫn cho người bảo trì: [`UPGRADE.md`](UPGRADE.md) · [`MIGRATIONS.md`](MIGRATIONS.md).
+#### Chẩn đoán và vận hành brain
+
+| Lệnh | Ý nghĩa |
+|---|---|
+| `npm run doctor` | Kiểm Node, Python, Docker, API và sức khoẻ knowledge. |
+| `npm run brain` | Dựng hoặc khởi động brain; ở image mode sẽ lấy image ứng dụng mới. |
+| `npm run brain:status` | Xem mode, cổng và trạng thái brain của project hiện tại. |
+| `npm run brain:list` | Xem mọi brain trên máy. |
+| `npm run brain:logs` | Theo dõi log stack. |
+| `npm run brain:restart` | Khởi động lại stack đang có. |
+| `npm run brain:down` | Tắt stack nhưng giữ dữ liệu. |
+| `npm run brain:pull` | Kéo lại model embedding `bge-m3`. |
+
+#### Knowledge
+
+| Lệnh | Ý nghĩa |
+|---|---|
+| `npm run verify` | Kiểm format, citation, router, ID và các bất biến của knowledge. |
+| `npm run verify:fix` | Nắn những lỗi an toàn có thể sửa tự động, như citation trôi dòng. |
+| `npm run sync` | Verify rồi đồng bộ file knowledge vào brain. |
+| `npm run sync:rebuild` | Dựng lại toàn bộ index từ file source-of-truth. |
+| `npm run sync:no-verify` | Bỏ gate verify; chỉ dành cho chẩn đoán có chủ đích, không dùng hằng ngày. |
+
+#### Nâng cấp
+
+| Lệnh | Ý nghĩa |
+|---|---|
+| `npm run update:check` | Kiểm tra có version mới hay không. |
+| `npm run update:dry` | Xem trước update sẽ thay đổi file nào. |
+| `npm run update` | Áp dụng template mới nhưng không đụng file instance của project. |
+| `npm run mcp` | In config MCP; INITIALIZATION thường tự chạy lệnh này cho agent. |
+
+#### Lệnh phá huỷ — đọc kỹ trước khi chạy
+
+| Lệnh | Điều bị xoá |
+|---|---|
+| `npm run uninstall:yes` | Runtime Docker, volume, image và build cache; **giữ** knowledge. |
+| `npm run uninstall:keep-cache` | Như trên nhưng giữ build cache dùng chung. |
+| `npm run reset:yes` | Xoá knowledge instance và kéo lại template trắng. |
+
+### Tình huống nào dùng lệnh nào?
+
+| Tình huống | Chuỗi hành động |
+|---|---|
+| Cài lần đầu | `npm run doctor` → `npm run brain` |
+| Alice Coding có version mới | `npm run update:check` → `npm run update:dry` → `npm run update` → `npm run brain` |
+| Chỉ app image được publish lại | `npm run brain` |
+| Brain có dấu hiệu lạ | `npm run doctor` → `npm run brain:status` → `npm run brain:logs` |
+| Citation bị trôi sau khi sửa source | `npm run verify:fix` → `npm run sync` |
+| Đổi embedding model hoặc index sai schema | `npm run sync:rebuild` |
+| Muốn tắt tạm thời | `npm run brain:down` |
+| Muốn gỡ app nhưng giữ tri thức | `npm run uninstall:yes` |
+| Muốn làm lại project knowledge từ đầu | `npm run reset:yes` |
+
+> Trên PowerShell, không dùng dạng `npm run x -- --flag` cho cờ không có giá trị; shim `npm.ps1`
+> có thể nuốt token `--`. Alice Coding đã cung cấp script riêng như `uninstall:yes`,
+> `reset:yes` và `sync:no-verify`.
 
 ---
 
-## 📂 Cấu trúc repo
+## 6. Dùng hằng ngày
 
+Sau INITIALIZATION, người dùng chỉ cần đưa task. Alice sẽ tự:
+
+1. nạp ký ức liên quan;
+2. đọc source và contract thật;
+3. thực hiện thay đổi;
+4. verify theo rủi ro;
+5. cập nhật knowledge và sync khi cần.
+
+Các tài liệu chính:
+
+- [`ALICE.md`](ALICE.md) — hiến pháp làm việc của agent.
+- [`ALICE.project.md`](ALICE.project.md) — đặc tả riêng của project.
+- [`INITIALIZATION.md`](INITIALIZATION.md) — quy trình bootstrap lần đầu.
+- [`brain/RETRIEVAL.md`](brain/RETRIEVAL.md) — cách agent truy vấn brain.
+- [`brain/KNOWLEDGE.md`](brain/KNOWLEDGE.md) — cách tinh luyện và bảo trì knowledge.
+- [`brain/TELEMETRY.md`](brain/TELEMETRY.md) — token, cost và dấu vết agent.
+- [`UPGRADE.md`](UPGRADE.md) — chi tiết nâng cấp và rollback.
+
+<details>
+<summary><b>Cấu trúc thư mục knowledge</b></summary>
+
+```text
+knowledge/
+├── ALICE.md
+├── ALICE.project.md
+├── INITIALIZATION.md
+├── wiki/
+├── decisions/
+├── mistakes/
+├── context/
+├── changelog/
+├── sub-agents/
+├── brain/
+└── tools/
 ```
-ALICE CODING/  (clone vào ./knowledge của project)
-├── VERSION                ← semver của template (đường nâng cấp)
-├── ALICE.md               ← [TEMPLATE] Hiến pháp: cách Alice làm việc
-├── ALICE.project.md       ← [INSTANCE] Đặc tả project: stack, convention, high-risk
-├── INITIALIZATION.md      ← [TEMPLATE] Bootstrap: quét repo → tinh luyện → dựng não
-├── UPGRADE.md · MIGRATIONS.md   ← [TEMPLATE] Đường nâng cấp
-├── tools/
-│   ├── verify.py          ← forcing function: kiểm kho tri thức (gate của sync)
-│   ├── update.py          ← nâng cấp template, không đụng tri thức project
-│   └── manifest.json      ← ranh giới template ↔ instance (+ sha256)
-├── brain/                 ← 🧠 Bộ não
-│   ├── README · SETUP · RETRIEVAL · SYNC · KNOWLEDGE
-│   ├── sync/sync.py       ← file→não, chống trùng, gate verify, --rebuild
-│   └── stack/             ← Docker 1-lệnh: compose + launcher
-├── wiki/     README(T) · ROUTER.md(I) · <module>.md(I)
-├── mistakes/ README(T) · LOG.md(I)     ← ID M-XXXX + trạng thái
-├── decisions/README(T) · LOG.md(I)     ← ID D-XXXX — ý muốn của Bệ hạ
-├── context/  README(T) · INDEX.md(I) · <digest>.md(I)
-├── changelog/README(T) · <module>.md(I)
-└── sub-agents/            ← [TEMPLATE] ngưỡng delegate + thu hồi bài học
-```
-`(T)` = template, `update` ghi đè · `(I)` = instance, `update` không chạm.
+
+- `wiki/`: hệ thống hiện hoạt động thế nào.
+- `decisions/`: người dùng đã chốt điều gì.
+- `mistakes/`: lỗi nào từng xảy ra và bằng chứng sửa.
+- `context/`: checkpoint của các phiên làm việc.
+- `changelog/`: thay đổi đáng nhớ theo module.
+- `sub-agents/`: luật delegate và thu hồi kết quả.
+
+</details>
+
+<details>
+<summary><b>Gỡ rối nhanh</b></summary>
+
+| Triệu chứng | Hành động |
+|---|---|
+| API hoặc web không healthy | `npm run brain:logs` |
+| Không biết brain đang dùng cổng nào | `npm run brain:status` |
+| Document extract thất bại | Kiểm **Settings → Models**, lịch sử gọi và Telemetry. |
+| Sync bị chặn | `npm run verify`, sửa lỗi thật rồi sync lại. |
+| Search rỗng sau khi đổi embedding | `npm run sync:rebuild` |
+| Model embedding chưa tải xong | `npm run brain:pull` |
+
+Log chi tiết nằm trong `brain/.logs/`. Xem thêm [`brain/stack/README.md`](brain/stack/README.md).
+
+</details>
 
 ---
 
-## 🗺️ Roadmap
+## 7. Roadmap
 
-**v2.1.2** — bộ khung kỷ luật, forcing function và đường nâng cấp đã ổn định.
-
-Đang làm:
-- Wrapper `/knowledge` cho Codex · Gemini · opencode
-- Benchmark `bge-m3` đối chiếu `Qwen3-Embedding`
-- Bản README tiếng Anh
-
-> Gặp lỗi khi cài? Mở issue kèm log service tương ứng — càng cụ thể càng vá nhanh.
+- Benchmark retrieval end-to-end có dataset và script tái lập công khai.
+- README tiếng Anh.
+- Trải nghiệm cài đặt và cấu hình agent đơn giản hơn.
+- Tiếp tục mở rộng telemetry mà không biến brain thành hệ thống theo dõi người dùng.
 
 ---
 
-## 📜 License & Credits
+## 8. Cảm ơn và License
 
-- Mã nguồn: [MIT](LICENSE).
-- Retrieval engine: [**ALICE CORE**](https://github.com/blueberry-sensei/alice-core) (MIT).
-- Ứng dụng brain: [**ALICE BRAIN**](https://github.com/blueberry-sensei/alice-brain) (MIT).
-- Embedding: [BAAI/bge-m3](https://huggingface.co/BAAI/bge-m3).
+ALICE CODING được xây dựng bởi **Blueberry Sensei** cho những người muốn giữ tốc độ của vibe
+coding nhưng không chấp nhận đánh đổi trí nhớ, tính đúng đắn và quyền kiểm soát project.
 
-<div align="center"><sub>Made with 🤍 for những phiên vibe coding không mất trí nhớ.</sub></div>
+Cảm ơn các dự án và giao thức nền tảng đã làm sản phẩm này khả thi:
 
-> `<BRAIN_ID>` là danh tính brain của **project này** — mỗi project một brain, nên tên khác nhau.
-> Đừng gõ tay: lấy nguyên khối cấu hình bằng `npm run mcp`, và lấy cổng bằng `npm run brain:status`.
+- [Model Context Protocol](https://modelcontextprotocol.io/) — giao thức kết nối agent với brain.
+- [BAAI/bge-m3](https://huggingface.co/BAAI/bge-m3) — embedding đa ngôn ngữ chạy local.
+- Docker, Python, FastAPI, Next.js, LiteLLM, SQLite, LanceDB và Ollama.
+
+Repo `alice-coding` được phát hành theo giấy phép [MIT](LICENSE). Dependency và model đi kèm tuân
+theo giấy phép riêng của từng dự án.
+
+<div align="center">
+
+**Made by Blueberry Sensei — for vibe coding that remembers.**
+
+</div>

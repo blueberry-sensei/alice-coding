@@ -6,6 +6,20 @@ Quy ước version: **semver**. MAJOR đổi = có breaking change bắt buộc 
 
 ---
 
+## 2.4.4 — README theo hành trình người dùng
+
+**Không breaking.** `npm run update` là đủ.
+
+README được viết lại theo thứ tự người mới thật sự cần: Alice Coding là gì → vấn đề của vibe
+coding → cơ chế và công nghệ → cài đặt riêng cho Windows Docker Desktop, Windows WSL và macOS →
+cập nhật/vận hành theo tình huống → roadmap, cảm ơn và license.
+
+Không có thay đổi runtime hay contract. Phần benchmark nói rõ hiện chưa có bộ đo retrieval
+end-to-end công khai; không dùng benchmark của riêng embedding để quảng cáo thành benchmark của
+toàn sản phẩm.
+
+---
+
 ## 2.4.3 — Telemetry: token, chi phí và dấu vết tri thức
 
 **Không breaking.** `npm run update` rồi `npm run brain` để lấy image mới.

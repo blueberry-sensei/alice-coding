@@ -71,6 +71,17 @@ function brainId(root = ROOT) {
   return `${prefixed}-${hash}`.slice(0, 54);
 }
 
+/**
+ * Host loopback dễ đọc cho brain: `<BRAIN_ID>.localhost`.
+ *
+ * `.localhost` là namespace loopback đặc biệt của trình duyệt, nên không phải sửa hosts file,
+ * không cần DNS và vẫn không phơi brain ra mạng. Giữ port riêng vì bỏ port sẽ cần một reverse
+ * proxy dùng chung toàn máy — thêm một điểm lỗi và một tiến trình có quyền bind cổng 80.
+ */
+function brainHost(id = brainId()) {
+  return `${id}.localhost`;
+}
+
 /* ------------------------------------------------------------------ .env IO */
 
 function parseEnv(text) {
@@ -225,6 +236,7 @@ async function resolve({ root = ROOT } = {}) {
 
   return {
     BRAIN_ID: id,
+    BRAIN_HOST: brainHost(id),
     BRAIN_STATE_DIR: dir,
     BRAIN_ENV_FILE: envFile,
     BRAIN_LOGS: logs,
@@ -252,6 +264,7 @@ function peek({ root = ROOT } = {}) {
   const values = readEnvFile(envFile) || {};
   return {
     BRAIN_ID: id,
+    BRAIN_HOST: brainHost(id),
     BRAIN_ENV_FILE: envFile,
     exists: fs.existsSync(envFile),
     WEB_PORT: values.WEB_PORT || "3000",
@@ -289,6 +302,7 @@ function listBrains() {
       const values = readEnvFile(path.join(stateRoot(), entry.name, ".env")) || {};
       return {
         id: entry.name,
+        host: brainHost(entry.name),
         web: values.WEB_PORT || "?",
         api: values.API_PORT || "?",
       };
@@ -322,7 +336,17 @@ async function main() {
   }
 }
 
-module.exports = { resolve, peek, listBrains, brainId, composeFiles, stateRoot, ROOT, STACK };
+module.exports = {
+  resolve,
+  peek,
+  listBrains,
+  brainId,
+  brainHost,
+  composeFiles,
+  stateRoot,
+  ROOT,
+  STACK,
+};
 
 if (require.main === module) {
   main().catch((error) => {

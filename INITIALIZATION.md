@@ -224,7 +224,8 @@ Nếu Bệ hạ muốn bật kiểm phủ sóng code→wiki: tạo `tools/verify
 > trước lúc đó, nên search ra kết quả sớm **không phải** bằng chứng brain đã sẵn sàng.
 
 Khi đã có LLM:
-1. Copy `brain/brain.config.example` → `brain/brain.config`; điền API base + token/tên login + source `alice-knowledge`.
+1. Copy `brain/brain.config.example` → `brain/brain.config`; chỉ điền token/tên login nếu cần.
+   API port và source name tự lấy theo brain của project (`<BRAIN_ID>-knowledge`), không gõ tay.
 2. `npm run sync` → **tự chạy verify trước** (dừng nếu còn ERROR), rồi ingest **chỉ** folder `knowledge/`.
 3. **Cắm brain vào agent — INIT TỰ LÀM, trước khi smoke.** Nếu MCP `brain` đã có trong phiên thì dùng
    thẳng. Nếu chưa có, ghi cấu hình MCP **stdio-bridge** vào config của agent đang chạy INIT:
@@ -238,7 +239,8 @@ Khi đã có LLM:
    nhắc restart — không hỏi, không giao việc đó cho Bệ hạ.
    Restart là blocker thật duy nhất ở đoạn này. Sau restart, tiếp tục đúng Bước 5; **không chạy lại
    INITIALIZATION từ đầu** và không dùng curl để thay cho smoke MCP.
-4. Qua MCP `list_sources` + `list_documents`, đối chiếu đúng source và đủ số file vừa ingest. Poll
+4. Qua MCP `list_sources` + `list_documents`, đối chiếu đúng source `<BRAIN_ID>-knowledge` và đủ
+   số file vừa ingest. Poll
    tới khi **TẤT CẢ document của source đều `ready`**:
    - `pending/loading/extracting` = còn chạy → tiếp tục theo dõi trong cùng lượt; có thể làm Bước 7
      trong lúc chờ nhưng **không kết thúc lượt** chỉ để báo tiến độ.

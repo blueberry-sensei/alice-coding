@@ -41,7 +41,9 @@ services:
       SAG_ENVIRONMENT: dev
       SAG_DEBUG: "false"
       SAG_SECRET_KEY: ${SAG_SECRET_KEY:?thieu SAG_SECRET_KEY - chay `npm run brain` de launcher tu sinh}
-      SAG_CORS_ORIGINS: http://localhost:${WEB_PORT:-3000}
+      # URL chính mang danh tính project. Giữ localhost cũ như alias tương thích để bookmark
+      # cũ không bị CORS chặn sau khi nâng cấp.
+      SAG_CORS_ORIGINS: http://${BRAIN_HOST:-localhost}:${WEB_PORT:-3000},http://localhost:${WEB_PORT:-3000}
       SAG_ALLOW_REGISTRATION: "false"
       SAG_DATABASE_URL: sqlite+aiosqlite:////data/sag.db
       SAG_DATA_DIR: /data/engine

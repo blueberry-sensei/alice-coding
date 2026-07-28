@@ -3,14 +3,18 @@
 # sync.py đọc file này; biến môi trường trùng tên sẽ ghi đè.
 
 # --- SAG API ---
-SAG_API_BASE=http://localhost:8000/api/v1
+# Mặc định tự lấy cổng API đúng của project từ `npm run sync`.
+# Chỉ bỏ comment khi cố ý trỏ sang một brain khác:
+# SAG_API_BASE=http://localhost:8000/api/v1
 # Cách 1: để sync.py tự login bằng tên (local identity của SAG)
 SAG_AUTH_NAME=Alice
 # Cách 2: dán sẵn JWT (ưu tiên nếu có); lấy từ POST /auth/login
 SAG_TOKEN=
 
 # --- Source của brain ---
-BRAIN_SOURCE_NAME=alice-knowledge
+# Mặc định: <BRAIN_ID>-knowledge, ví dụ alice-my-project-a1b2c3-knowledge.
+# Bỏ comment để dùng một tên tuỳ chỉnh:
+# BRAIN_SOURCE_NAME=my-custom-knowledge
 
 # --- Phạm vi đồng bộ (thư mục con của knowledge/, cách nhau bằng dấu phẩy) ---
 # Đủ 5 trụ cột tri thức. BỎ SÓT một cái = trụ cột đó vô hình với retrieval.

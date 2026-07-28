@@ -6,7 +6,7 @@ Tiêu chí **A — tự nạp ký ức**. Áp dụng **đầu mỗi task** (và 
 `list_sources` · `list_documents` · `outline` · `search` · `grep` · `get_chunk` · `read` · `get_entity`
 
 ## Funnel bắt buộc
-1. **`list_sources`** — xác nhận scope + lấy `source_id` (`alice-knowledge`).
+1. **`list_sources`** — xác nhận scope + lấy `source_id` (`<BRAIN_ID>-knowledge`).
 2. **Truy vấn đa góc** (không chỉ 1 lần) — recall theo nhiều mặt của task:
    - theo **mô tả task** (câu hỏi/khái niệm) → `search`.
    - theo **tên file/module/định danh** chính xác → `grep`.

@@ -58,12 +58,17 @@ if ($env:BRAIN_MODE -eq "dev") {
   $env:DOCKER_BUILDKIT = "1"
 }
 
+if ([string]::IsNullOrWhiteSpace($env:BIND_ADDRESS)) {
+  $env:BIND_ADDRESS = "127.0.0.1"
+}
+
 if ($env:BIND_ADDRESS -ne "127.0.0.1") {
   Write-Host "!! WARNING: BIND_ADDRESS=$($env:BIND_ADDRESS) exposes the brain off this machine over PLAIN HTTP."
   Write-Host "   API keys typed in the UI would travel the network in the clear. Trusted networks only."
 }
 
 Write-Host "BRAIN_ID     = $($env:BRAIN_ID)"
+Write-Host "BRAIN_HOST   = $($env:BRAIN_HOST)"
 Write-Host "Mode         = $($env:BRAIN_MODE)"
 Write-Host "BIND_ADDRESS = $($env:BIND_ADDRESS)"
 Write-Host "Ports        = web $($env:WEB_PORT) | api $($env:API_PORT)"
@@ -95,7 +100,7 @@ docker @dc exec -T embedding ollama pull bge-m3
 if ($LASTEXITCODE -ne 0) { Write-Host "!! Model pull failed. Run it manually: npm run brain:pull" }
 
 Write-Host ""
-Write-Host "==> ALICE app: http://localhost:$($env:WEB_PORT)"
+Write-Host "==> ALICE app: http://$($env:BRAIN_HOST):$($env:WEB_PORT)"
 Write-Host "==> Stack build log: $(Join-Path $LogDir 'brain-up.log')"
 Write-Host "==> API + engine log: $(Join-Path $env:BRAIN_LOGS 'sag-api.log')"
 Write-Host "==> Brain config (OUTSIDE the repo, holds a secret - never commit): $($env:BRAIN_ENV_FILE)"

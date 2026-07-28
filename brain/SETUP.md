@@ -11,17 +11,19 @@ Luồng đơn giản: **pull → 1 lệnh → thêm provider LLM trong app → c
 ```bash
 npm run brain
 ```
-Chạy **một lần là xong**: launcher tự chọn script đúng môi trường, tính `BRAIN_ID` riêng cho project, cấp cổng trống, sinh `SAG_SECRET_KEY` (lưu **ngoài repo**), **kéo image dựng sẵn** + chạy **nền** + pull `bge-m3`. **Không cần git, không cần source, không cần sửa `.env` tay.**
+Chạy **một lần là xong**: launcher tự chọn script đúng môi trường, tính `BRAIN_ID` riêng cho project, cấp hostname `<BRAIN_ID>.localhost` + cổng trống, sinh `SAG_SECRET_KEY` (lưu **ngoài repo**), **kéo image dựng sẵn** + chạy **nền** + pull `bge-m3`. **Không cần git, không cần source, không cần sửa `.env` tay.**
 
 > **Mỗi project một brain.** Máy đã có brain của project khác thì cứ chạy tiếp — launcher tự né cổng và tự tách dữ liệu. `npm run brain:list` cho biết máy đang có brain nào.
 >
-> **Cổng không cố định.** Mọi URL dưới đây dùng `3000`/`8000` làm ví dụ; lấy cổng thật bằng `npm run brain:status`.
+> **URL và cổng không gõ tay.** Mỗi project có URL riêng, ví dụ
+> `http://alice-my-project-a1b2c3.localhost:3000`; lấy URL thật bằng `npm run brain:status`.
+> `.localhost` là loopback, không cần DNS/hosts file và không phơi brain ra mạng.
 
 Vận hành/log/dừng: [stack/README.md](stack/README.md).
 
 ## Bước 2 — Cấu hình LLM trên app
-Mở địa chỉ launcher in ra (mặc định `http://localhost:3000`) rồi làm ba việc:
-1. **http://localhost:3000** → nhập tên tạo identity (vd `Alice`).
+Mở địa chỉ project mà launcher in ra rồi làm ba việc:
+1. **`http://<BRAIN_ID>.localhost:<WEB_PORT>`** → nhập tên tạo identity (vd `Alice`).
 2. **Settings → Models** → thêm provider LLM. Đề xuất **AIStudio/Gemini free** ([lấy key](https://aistudio.google.com/apikey)) hoặc OpenRouter free. *Embedding không cần set — đã bundled `bge-m3`.*
 3. Tạo source thử + ingest 1 đoạn text + search → xác nhận embedding & LLM chạy.
 
@@ -63,7 +65,10 @@ Agent chạy MCP server *bên trong container* rồi nối qua stdio → bỏ qu
   ```
   - Codex: khai báo ở `~/.codex/config.toml` mục `[mcp_servers.brain]` (`command`/`args` như trên). Claude Desktop: `claude_desktop_config.json`. Điều kiện: stack đang chạy (container `<BRAIN_ID>-api-1`).
 
-**Cách B — HTTP MCP (chỉ khi Windows với tới được WSL, vd Docker Desktop / mirrored):** URL `http://localhost:8000/mcp/` + header `Authorization: Bearer <token>` (token: `POST /api/v1/auth/login`). VD Claude Code: `claude mcp add --transport http brain "http://localhost:8000/mcp/" --header "Authorization: Bearer <TOKEN>"`. Chi tiết: [../sub-agents/mcp.md](../sub-agents/mcp.md).
+**Cách B — HTTP MCP (chỉ khi Windows với tới được WSL, vd Docker Desktop / mirrored):** dùng
+URL API mà `npm run brain:status` in ra, thêm `/mcp/`, cùng header
+`Authorization: Bearer <token>` (token: `POST /api/v1/auth/login`). Chi tiết:
+[../sub-agents/mcp.md](../sub-agents/mcp.md).
 
 ## Bước 4 — Chạy INITIALIZATION (từ desktop agent)
 Mở Claude/Codex desktop trong repo project → *"Đọc và chạy knowledge/INITIALIZATION.md"*. Agent **tinh luyện** repo → `knowledge/` → ingest vào não (Bước 3b) → smoke → in vibe base-prompt.
@@ -90,8 +95,9 @@ Mỗi dòng log của API có `request_id`; lấy id đó lần được cả ch
 - **AI trả lời sai ngôn ngữ:** vào **Settings → Assistant** đặt chỉ dẫn *"Always respond in Vietnamese"*. `SAG_SAG_LANGUAGE` là ngôn ngữ **prompt trích xuất** nội bộ, không phải ngôn ngữ câu trả lời — giữ `en` cho model bám JSON schema ổn định.
 - **Document FAILED (extract):** chưa có provider LLM nào, hoặc model không phát được JSON schema → thêm provider ở **Settings → Models** và xem **lịch sử gọi** để biết provider nào fail vì gì.
 - **Embedding lỗi / search rỗng:** embedding **không** đổi nhà khi lỗi (đổi model = đổi không gian vector), nên nó thử lại rồi báo lỗi thẳng và để document ở trạng thái FAILED. Xem `npm run brain:logs`; kiểm model đã pull: `npm run brain:status`.
-- **Sync không kết nối:** `npm run brain:status`, rồi mở `http://localhost:8000/api/v1/system/ready`.
+- **Sync không kết nối:** `npm run brain:status`, rồi mở URL API được in ra + `/api/v1/system/ready`.
 - Chi tiết vận hành stack: [stack/README.md](stack/README.md).
 
-> `<BRAIN_ID>` là danh tính brain của **project này** — mỗi project một brain, nên tên khác nhau.
-> Đừng gõ tay: lấy nguyên khối cấu hình bằng `npm run mcp`, và lấy cổng bằng `npm run brain:status`.
+> `<BRAIN_ID>` là danh tính brain của **project này** — nó cũng đặt tên hostname và knowledge
+> source (`<BRAIN_ID>-knowledge`). Đừng gõ tay: lấy nguyên khối cấu hình bằng `npm run mcp`, và
+> lấy URL bằng `npm run brain:status`.

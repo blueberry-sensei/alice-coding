@@ -6,6 +6,20 @@ Quy ước version: **semver**. MAJOR đổi = có breaking change bắt buộc 
 
 ---
 
+## 2.4.6 — URL và source mang danh tính project
+
+**Không breaking.** `npm run update` rồi `npm run brain`.
+
+Mỗi brain nay được mở bằng `http://<BRAIN_ID>.localhost:<WEB_PORT>` thay vì mọi tab đều hiện
+`localhost`. `.localhost` vẫn là loopback local, không cần DNS hay sửa hosts file. Alias
+`http://localhost:<WEB_PORT>` cũ vẫn hoạt động để bookmark không gãy.
+
+Lần `npm run sync` kế tiếp đổi tên source hiện có từ `alice-knowledge` sang
+`<BRAIN_ID>-knowledge` **ngay trên source cũ**; không tạo source rỗng, không ingest lại và không
+tăng document count. API port/source tuỳ chỉnh trong `brain.config` vẫn được giữ nguyên.
+
+---
+
 ## 2.4.5 — Slogan của ALICE CODING
 
 **Không breaking.** `npm run update` là đủ.

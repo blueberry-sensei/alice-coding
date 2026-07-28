@@ -6,17 +6,25 @@ Stack Docker gói sẵn: **ALICE** (api + web) + **embedding `bge-m3` local** (b
 ```bash
 npm run brain
 ```
-Launcher tự chọn script đúng môi trường. Chạy **một lần là xong**: tính `BRAIN_ID` cho project → cấp cổng trống → sinh `SAG_SECRET_KEY` (lưu **ngoài repo**) → **kéo image dựng sẵn** → chạy **nền** → pull `bge-m3`. Cuối cùng launcher in ra đúng URL kèm cổng đã cấp.
+Launcher tự chọn script đúng môi trường. Chạy **một lần là xong**: tính `BRAIN_ID` cho project →
+cấp hostname `<BRAIN_ID>.localhost` + cổng trống → sinh `SAG_SECRET_KEY` (lưu **ngoài repo**) →
+**kéo image dựng sẵn** → chạy **nền** → pull `bge-m3`. Cuối cùng launcher in đúng URL project.
 
 Không cần `git`, không cần source, không phải build gì. Chỉ cần Docker và Node.
 
-> Cổng **không cố định**. Project đầu tiên trên máy thường vẫn được 3000/8000; project sau tự né sang cổng trống. Lấy cổng thật bằng `npm run brain:status`, xem toàn máy bằng `npm run brain:list`.
+> Hostname và cổng **không gõ tay**. Ví dụ:
+> `http://alice-my-project-a1b2c3.localhost:3000`. Project sau có hostname khác và tự né cổng.
+> Lấy URL thật bằng `npm run brain:status`, xem toàn máy bằng `npm run brain:list`.
 
 ### Mỗi project một brain
 
 `BRAIN_ID` suy từ **đường dẫn tuyệt đối của kho tri thức**, rồi được truyền cho compose qua `-p`.
 Vì vậy container, network và named volume của mỗi project đều mang tiền tố riêng — hai project
 chạy song song không đụng nhau và **không có đường nào nhìn thấy dữ liệu của nhau**.
+
+Cùng ID đó tạo hostname `<BRAIN_ID>.localhost` và source `<BRAIN_ID>-knowledge`. `.localhost`
+là loopback đặc biệt của trình duyệt nên không cần DNS/hosts file. URL vẫn giữ port riêng; bỏ port
+sẽ cần một reverse proxy dùng chung toàn máy, làm tăng quyền và điểm lỗi nhưng không tăng cách ly.
 
 ### Hai chế độ
 

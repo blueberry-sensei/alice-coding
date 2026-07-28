@@ -113,6 +113,7 @@ if [ "$BIND_ADDRESS" != "127.0.0.1" ]; then
 fi
 
 echo "BRAIN_ID     = $BRAIN_ID"
+echo "BRAIN_HOST   = $BRAIN_HOST"
 echo "Mode         = $BRAIN_MODE"
 echo "BIND_ADDRESS = $BIND_ADDRESS"
 echo "Ports        = web $WEB_PORT | api $API_PORT"
@@ -137,7 +138,7 @@ dc exec -T embedding ollama pull bge-m3 \
   || echo "!! Model pull failed. Run it manually: npm run brain:pull"
 
 echo ""
-echo "==> ALICE app: http://localhost:${WEB_PORT}"
+echo "==> ALICE app: http://${BRAIN_HOST}:${WEB_PORT}"
 [ -n "$LOG_FILE" ] && echo "==> Stack build log: $LOG_FILE"
 echo "==> API + engine log: $BRAIN_LOGS/sag-api.log"
 echo "==> Brain config (OUTSIDE the repo, holds a secret - never commit): $BRAIN_ENV_FILE"

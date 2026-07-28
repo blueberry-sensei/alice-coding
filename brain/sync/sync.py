@@ -91,11 +91,22 @@ def _install_file_log():
 # diễn giải sai map file->document rồi tạo document trùng.
 STATE_SCHEMA = 2
 
+LEGACY_API_BASE = "http://localhost:8000/api/v1"
+LEGACY_SOURCE_NAME = "alice-knowledge"
+RUNTIME_BRAIN_ID = os.environ.get("ALICE_BRAIN_ID", "").strip()
+RUNTIME_API_PORT = os.environ.get("ALICE_BRAIN_API_PORT", "").strip()
+
 DEFAULTS = {
-    "SAG_API_BASE": "http://localhost:8000/api/v1",
+    "SAG_API_BASE": (
+        "http://localhost:%s/api/v1" % RUNTIME_API_PORT
+        if RUNTIME_API_PORT else LEGACY_API_BASE
+    ),
     "SAG_AUTH_NAME": "Alice",
     "SAG_TOKEN": "",
-    "BRAIN_SOURCE_NAME": "alice-knowledge",
+    "BRAIN_SOURCE_NAME": (
+        "%s-knowledge" % RUNTIME_BRAIN_ID
+        if RUNTIME_BRAIN_ID else LEGACY_SOURCE_NAME
+    ),
     "BRAIN_ROOT": str(KNOWLEDGE_DIR),            # knowledge/
     "BRAIN_INCLUDE": "wiki,mistakes,decisions,context,changelog",
     "BRAIN_EXCLUDE": "_TEMPLATE.md",
@@ -113,6 +124,12 @@ def load_config(path):
                 continue
             k, v = line.split("=", 1)
             cfg[k.strip()] = v.strip()
+    # Bản cũ chép hai default cứng vào brain.config. Coi đúng hai giá trị đó là default kế
+    # thừa để project đang dùng tự nhận port + source identity mới; giá trị tuỳ chỉnh vẫn giữ.
+    if RUNTIME_API_PORT and cfg["SAG_API_BASE"] == LEGACY_API_BASE:
+        cfg["SAG_API_BASE"] = "http://localhost:%s/api/v1" % RUNTIME_API_PORT
+    if RUNTIME_BRAIN_ID and cfg["BRAIN_SOURCE_NAME"] == LEGACY_SOURCE_NAME:
+        cfg["BRAIN_SOURCE_NAME"] = "%s-knowledge" % RUNTIME_BRAIN_ID
     for k in list(cfg):                          # env override
         if os.environ.get(k):
             cfg[k] = os.environ[k]
@@ -156,11 +173,37 @@ def get_token(cfg):
     return tok
 
 
-def ensure_source(cfg, token):
+def ensure_source(cfg, token, state):
     base, name = cfg["SAG_API_BASE"], cfg["BRAIN_SOURCE_NAME"]
-    for s in as_items(http("GET", base + "/sources", token=token)):
-        if s.get("name") == name:
-            return s.get("id")
+    sources = as_items(http("GET", base + "/sources", token=token))
+    by_id = {s.get("id"): s for s in sources if s.get("id")}
+    by_name = {s.get("name"): s for s in sources if s.get("name")}
+
+    # State source_id là danh tính mạnh hơn tên. Khi nâng cấp từ `alice-knowledge`, đổi TÊN
+    # source hiện có thay vì tạo source rỗng mới; document_id và document count giữ nguyên.
+    previous = by_id.get(state.get("source_id"))
+    desired = by_name.get(name)
+    if previous:
+        if previous.get("name") == name:
+            return previous.get("id")
+        if desired and desired.get("id") != previous.get("id"):
+            raise SystemExit(
+                "[brain-sync] Cannot rename source '%s' to '%s': that name already exists."
+                % (previous.get("name"), name)
+            )
+        updated = http(
+            "PATCH",
+            "%s/sources/%s" % (base, previous.get("id")),
+            token=token,
+            data={"name": name},
+        )
+        if updated.get("id") != previous.get("id"):
+            raise SystemExit("[brain-sync] Could not rename the existing source: %s" % updated)
+        print("[brain-sync] Renamed source: %s -> %s" % (previous.get("name"), name))
+        return previous.get("id")
+
+    if desired:
+        return desired.get("id")
     created = http("POST", base + "/sources", token=token, data={"name": name})
     sid = created.get("id")
     if not sid:
@@ -254,9 +297,9 @@ def main():
     run_verify(args.no_verify)
 
     cfg = load_config(args.config)
-    token = get_token(cfg)
-    source_id = ensure_source(cfg, token)
     state = load_state(cfg, args.rebuild)
+    token = get_token(cfg)
+    source_id = ensure_source(cfg, token, state)
     state["source_id"] = source_id
     root, files = target_files(cfg)
 

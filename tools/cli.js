@@ -95,6 +95,7 @@ function composeEnv() {
     BIND_ADDRESS: map.BIND_ADDRESS || (process.platform === "win32" ? "127.0.0.1" : ""),
     WEB_PORT: info.WEB_PORT,
     API_PORT: info.API_PORT,
+    BRAIN_HOST: info.BRAIN_HOST,
     // compose.dev.yaml nội suy ${BRAIN_ID} vào tag image. Thiếu biến này thì `down`/`uninstall`
     // ở chế độ dev nhìn ra tag rỗng và KHÔNG xoá được image vừa build.
     BRAIN_ID: info.BRAIN_ID,
@@ -406,13 +407,13 @@ function up() {
   return run("bash", [path.join(STACK, "brain-up.sh")]);
 }
 
-function python(scriptRel, args) {
+function python(scriptRel, args, opts = {}) {
   const py = findPython();
   if (!py) {
     console.error(C.r("Python not found.") + " Python 3.9+ is required (https://python.org).");
     return 1;
   }
-  return run(py.cmd, [...py.pre, path.join(ROOT, scriptRel), ...args]);
+  return run(py.cmd, [...py.pre, path.join(ROOT, scriptRel), ...args], opts);
 }
 
 async function status() {
@@ -428,13 +429,15 @@ async function status() {
   else console.log(C.r("  Docker not found."));
   console.log(C.b("\nServices:"));
   const probes = [
-    ["API", `http://localhost:${info.API_PORT}`, "/api/v1/system/ready"],
-    ["Web", `http://localhost:${info.WEB_PORT}`, ""],
+    ["API", `http://${info.BRAIN_HOST}:${info.API_PORT}`, `http://localhost:${info.API_PORT}`, "/api/v1/system/ready"],
+    ["Web", `http://${info.BRAIN_HOST}:${info.WEB_PORT}`, `http://localhost:${info.WEB_PORT}`, ""],
   ];
-  for (const [label, base, probe] of probes) {
-    const res = await get(base + probe);
+  for (const [label, displayBase, probeBase, probe] of probes) {
+    // Node trên một số bản Windows không tự phân giải `*.localhost`; probe qua loopback
+    // thuần nhưng luôn in URL project-specific mà trình duyệt dùng.
+    const res = await get(probeBase + probe);
     const up = probe ? res && res.status === 200 : Boolean(res);
-    console.log(`  ${label} ${base}  ${up ? C.g("ready") : C.r("down")}`);
+    console.log(`  ${label} ${displayBase}  ${up ? C.g("ready") : C.r("down")}`);
   }
   return 0;
 }
@@ -457,7 +460,8 @@ async function list() {
   for (const brain of brains) {
     const mark = brain.id === here ? C.g(" <- current project") : "";
     const state = running.has(brain.id) ? C.g("running") : C.d("stopped");
-    console.log(`  ${state}  ${brain.id.padEnd(34)} web ${brain.web} | api ${brain.api}${mark}`);
+    console.log(`  ${state}  ${brain.id}${mark}`);
+    console.log(C.d(`           web http://${brain.host}:${brain.web} | api http://${brain.host}:${brain.api}`));
   }
   console.log(C.d("\nEach brain is its own compose project: containers, network and volumes are all separate."));
   return 0;
@@ -506,14 +510,19 @@ async function doctor() {
   const cfg = fs.existsSync(path.join(ROOT, "brain", "brain.config"));
   console.log(`[${cfg ? OK : WARN}] brain.config ${cfg ? "present" : "missing - copy brain/brain.config.example when you need sync"}`);
 
-  const ready = await get("http://localhost:8000/api/v1/system/ready");
+  const info = brainEnv.peek();
+  const ready = info.exists
+    ? await get(`http://localhost:${info.API_PORT}/api/v1/system/ready`)
+    : null;
   if (ready && ready.status === 200) {
-    console.log(`[${OK}] ALICE API ready (localhost:8000)`);
-    const cap = await get("http://localhost:8000/api/v1/system/capabilities");
+    console.log(`[${OK}] ALICE API ready (http://${info.BRAIN_HOST}:${info.API_PORT})`);
+    const cap = await get(`http://localhost:${info.API_PORT}/api/v1/system/capabilities`);
     let llm = null;
     try { llm = JSON.parse(cap.body).llm_configured; } catch (_) {}
     if (llm === true) console.log(`[${OK}] LLM configured - ready to ingest`);
-    else if (llm === false) console.log(`[${WARN}] LLM NOT configured - open http://localhost:3000 -> Settings -> Models`);
+    else if (llm === false) {
+      console.log(`[${WARN}] LLM NOT configured - open http://${info.BRAIN_HOST}:${info.WEB_PORT} -> Settings -> Models`);
+    }
     else console.log(`[${WARN}] Could not read /system/capabilities (API version mismatch?)`);
   } else {
     console.log(`[${WARN}] ALICE API is down - run ${C.b("npm run brain")}`);
@@ -533,6 +542,24 @@ async function doctor() {
   return blocking ? 1 : 0;
 }
 
+function sync(args) {
+  const info = brainEnv.peek();
+  if (!info.exists) {
+    console.error(C.r("This project's brain has never been built."));
+    console.error("Run this first: " + C.b("npm run brain"));
+    return 1;
+  }
+  return python("brain/sync/sync.py", args, {
+    env: {
+      ...process.env,
+      // Đây là default runtime, không phải override cấu hình người dùng. sync.py chỉ dùng
+      // chúng khi brain.config còn giữ giá trị mặc định cũ hoặc không khai báo.
+      ALICE_BRAIN_ID: info.BRAIN_ID,
+      ALICE_BRAIN_API_PORT: info.API_PORT,
+    },
+  });
+}
+
 /* ------------------------------------------------------------------ main */
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -548,7 +575,7 @@ const [cmd, ...rest] = process.argv.slice(2);
     case "list":     process.exit(await list());
     case "pull":     process.exit(compose(["exec", "-T", "embedding", "ollama", "pull", "bge-m3"]));
     case "verify":   process.exit(python("tools/verify.py", rest));
-    case "sync":     process.exit(python("brain/sync/sync.py", rest));
+    case "sync":     process.exit(sync(rest));
     case "update":   process.exit(python("tools/update.py", rest));
     case "mcp":      process.exit(mcp());
     case "doctor":   process.exit(await doctor());

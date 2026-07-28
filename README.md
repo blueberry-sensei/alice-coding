@@ -9,7 +9,7 @@
 **Một sản phẩm của [Blueberry Sensei](https://github.com/blueberry-sensei).**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.5-6E56CF)](VERSION)
+[![Version](https://img.shields.io/badge/version-2.4.6-6E56CF)](VERSION)
 [![Engine](https://img.shields.io/badge/engine-ALICE%20CORE-6E56CF)](#alice-core-khác-rag-thường-ở-đâu)
 [![Embedding](https://img.shields.io/badge/embedding-bge--m3%20local-2EA043)](https://huggingface.co/BAAI/bge-m3)
 [![Runtime](https://img.shields.io/badge/runtime-Docker-2496ED?logo=docker&logoColor=white)](#4-cài-đặt)
@@ -276,8 +276,9 @@ npm run doctor
 npm run brain
 ```
 
-Launcher dùng Docker Desktop, tự tạo secret ngoài repo, tự cấp cổng trống và in URL chính xác.
-Project đầu tiên thường là `http://localhost:3000`; project tiếp theo có thể dùng cổng khác.
+Launcher dùng Docker Desktop, tự tạo secret ngoài repo, tự cấp cổng trống và in URL mang danh
+tính project, ví dụ `http://alice-my-project-a1b2c3.localhost:3000`. Phần hash ngắn tách được
+hai project trùng tên; `.localhost` vẫn chỉ về máy này, không cần DNS hay sửa hosts file.
 
 ### Windows + WSL + Docker CE
 
@@ -293,7 +294,7 @@ npm run brain
 ```
 
 Node phải có trong WSL; launcher có thể tự cài bản local khi thiếu, không cần sudo. Nếu Windows
-không mở được `localhost`, dùng URL theo IP distro mà launcher in ở dòng cuối.
+không mở được URL `.localhost`, dùng URL theo IP distro mà launcher in ở dòng cuối.
 
 ### macOS + Docker Desktop
 

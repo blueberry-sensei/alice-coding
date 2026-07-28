@@ -6,6 +6,33 @@ Quy ước version: **semver**. MAJOR đổi = có breaking change bắt buộc 
 
 ---
 
+## 2.4.10 — Luật ALICE tự nạp mỗi phiên và sống qua auto-compact
+
+**Không breaking.** Sau `npm run update`, agent chạy `npm run wire` một lần.
+
+2.4.9 chỉ sinh skill/command `alice`, nên luật chỉ có hiệu lực **khi người dùng nhớ gõ `/alice`**.
+Quên gõ là phiên đó không có luật nào: agent bỏ qua nạp ký ức, quên gọi sub-agent qua Brain, ghi
+tri thức xong không sync. Bản này thêm hai lớp nữa, cùng sinh từ một `prompts.md`:
+
+- `ALICE.md` ở **root project** — base prompt đã bake, đính kèm được cho agent hoặc chat bất kỳ.
+  Không còn phải chép base prompt bằng tay.
+- `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` ở root — file mà client **tự nạp mỗi phiên**. `wire` chỉ
+  thay khối giữa `<!-- BEGIN ALICE CODING -->` và `<!-- END ALICE CODING -->`; nội dung sẵn có của
+  bạn giữ nguyên, chưa có file thì tạo mới.
+
+Riêng Claude Code, `wire` merge thêm hook `SessionStart` vào
+`.claude/settings.json`, chạy `node knowledge/tools/reminder.js` để in lại `ALICE.md` vào context
+sau mỗi lần auto-compact. Hook chạy **ngoài** model nên compaction không xoá được — luật "sau
+compact phải đọc lại" nếu chỉ nằm trong context thì chính nó cũng bị xoá. Settings có sẵn được
+merge, không ghi đè; file hỏng JSON thì `wire` in `SKIP` và không đụng vào.
+
+Project đã có `ALICE.md` riêng ở root, hoặc command/skill `alice` không mang marker ALICE → `wire`
+dừng trước mọi thao tác ghi và in tên file xung đột. Đổi tên file của bạn rồi chạy lại.
+
+Commit toàn bộ file sinh ra cùng project.
+
+---
+
 ## 2.4.9 — Entry point ALICE cho coding agent
 
 **Không breaking.** Sau `npm run update`, agent chạy `npm run wire` một lần nếu project đã có

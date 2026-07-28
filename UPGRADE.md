@@ -14,7 +14,7 @@ Từ v2, ranh giới sở hữu là tuyệt đối:
 
 | Chủ sở hữu | Gồm những gì | `update` làm gì |
 |---|---|---|
-| **TEMPLATE** | `ALICE.md`, `INITIALIZATION.md`, `README.md`, `tools/*.py`, `brain/**`, `sub-agents/*.md`, các `README.md`/`_TEMPLATE.md` của trụ cột | **Ghi đè** (nếu bạn chưa sửa tay) |
+| **TEMPLATE** | `ALICE.md`, `INITIALIZATION.md`, `README.md`, `tools/*.py`, `tools/*.js`, `brain/**`, `sub-agents/*.md`, các `README.md`/`_TEMPLATE.md` của trụ cột | **Ghi đè** (nếu bạn chưa sửa tay) |
 | **INSTANCE** | `ALICE.project.md`, `wiki/ROUTER.md`, `wiki/<module>.md`, `mistakes/LOG.md`, `decisions/LOG.md`, `context/**`, `changelog/<module>.md`, `brain/brain.config`, `tools/verify.config`, `prompts.md` | **Không bao giờ chạm** |
 
 Ranh giới này khai báo trong `tools/manifest.json` (kèm sha256 lúc phát hành), nên `update` phân biệt được **"file template bạn chưa từng động vào"** (ghi đè an toàn) với **"file template bạn đã sửa tay"** (không ghi đè — để lại `<file>.new` cho bạn tự gộp).
@@ -39,6 +39,7 @@ Ghim một version cụ thể: `npm.cmd run update -- --ref v2.1.0` (dùng `npm.
 3. Chạy `npm run verify` — nếu template siết thêm quy ước mới, đây là chỗ nó báo.
 4. Nếu có ERROR về format trụ cột (vd template thêm trường bắt buộc) → sửa rồi mới `sync`. Bản thân `sync.py` cũng chặn nếu còn ERROR.
 5. Chạy `npm run sync` để não khớp lại file.
+6. Chạy `npm run wire` để entry point ở **root project** (`ALICE.md`, khối ALICE trong `CLAUDE.md`/`AGENTS.md`/`GEMINI.md`, skill `/alice`) khớp lại template mới. Những file này nằm ngoài `knowledge/` nên `update` **không bao giờ** đụng tới — chỉ `wire` mới sinh lại chúng.
 
 ## Rollback
 

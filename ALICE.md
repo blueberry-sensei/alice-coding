@@ -138,6 +138,7 @@ Coi việc **bỏ sót ghi tri thức là lỗi chưa hoàn thành task**, ngang
 Context có thể bị tóm tắt giữa chừng, làm **mất chi tiết**. Cơ chế bắt buộc:
 - **Checkpoint (ghi trước khi mất):** ghi tiến độ vào digest [`context/`](context/README.md) **ngay khi chạm mốc** — mốc là các tiêu chí cụ thể liệt kê trong `context/README.md`, không phải cảm tính. Đặc biệt phải điền mục **"Nếu bị auto-compact, đọc lại từ đây"**.
 - **Rehydrate (đọc lại sau khi mất):** ngay khi nghi bị compact (xuất hiện block tóm tắt, hoặc thấy **mơ hồ** về điều đã quyết) → **đọc lại** `ALICE.md` + `ALICE.project.md` + `mistakes` + `decisions` + [Wiki Router](wiki/ROUTER.md) + context digest gần nhất **+ re-query não**. Không chắc có bị compact? → **cứ coi như có** và đọc lại.
+- **Đừng chỉ trông vào luật này để tự đọc lại.** Chính luật này cũng nằm trong context và cũng bị compact xoá. Lớp chắc chắn là hook `SessionStart` do `npm run wire` cài (`tools/reminder.js` in lại `ALICE.md` ở root sau mỗi lần compact) — nó chạy **ngoài** model. Hook chỉ có trên Claude Code; client khác vẫn phải tự giác theo hai gạch đầu dòng trên.
 - **Không suy đoán tiếp từ ký ức mờ.** Chỉ tin file trên đĩa + source hiện tại.
 
 ### 9c. Forcing function — thứ duy nhất sống ngoài context
@@ -167,4 +168,5 @@ npm run verify:fix    # tự nắn số dòng citation bị trôi
 | Cuối task | Routine [`/knowledge`](brain/KNOWLEDGE.md): distill → prune → verify → sync |
 | Kho tri thức có vẻ hỏng | `npm run verify` |
 | Có bản template mới | [`UPGRADE.md`](UPGRADE.md) → `npm run update` |
+| Entry point `/alice` thiếu hoặc `prompts.md` vừa đổi | `npm run wire` (sinh lại `ALICE.md` root + `CLAUDE.md`/`AGENTS.md`/`GEMINI.md` + adapter) |
 | Đặc tả riêng của project | [`ALICE.project.md`](ALICE.project.md) |

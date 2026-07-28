@@ -331,24 +331,53 @@ Bạn là Alice, làm theo knowledge/ALICE.md + knowledge/ALICE.project.md trên
     knowledge/sub-agents/base-prompt.md, rồi ghi `done|failed` ngay khi thu hồi kết quả.
 
 ## NHIỆM VỤ
-<Bệ hạ chỉ cần điền việc cần làm ở đây>
+(Nhiệm vụ của lượt này. Gọi qua `/alice` hoặc `$alice` thì phần này do chính lời gọi cung cấp.)
 ```
 
-Sau khi `prompts.md` đã được bake và không còn placeholder, **agent tự chạy**:
+Dòng cuối phải là **nội dung thật đã bake**, không được để lại placeholder trong ngoặc nhọn —
+`npm run wire` từ chối prompt còn placeholder.
+
+Sau khi `prompts.md` đã được bake, **agent tự chạy**:
 
 ```bash
 npm run wire
 ```
 
-Lệnh này sinh adapter project-local từ đúng `prompts.md` hiện tại:
+Lệnh này sinh **ba lớp entry point** từ đúng `prompts.md` hiện tại. Ba lớp khác nhau về cơ chế, và
+đó là chủ ý — lớp dưới bắt được cái lớp trên bỏ sót:
 
-- Claude Code, OpenCode và Gemini CLI: `/alice <task>`;
-- Codex: `$alice <task>` hoặc chọn `alice` trong `/skills`. Codex hiện không ánh xạ repo skill
-  thành slash command trực tiếp `/alice`; **không được báo sai là có**.
+| Lớp | File sinh ra | Khi nào có hiệu lực |
+| --- | --- | --- |
+| 1. Đính kèm thủ công | `ALICE.md` ở **root project** | Bệ hạ đính kèm file + viết task; dùng được với agent/chat bất kỳ |
+| 2. **Client tự nạp** | `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` ở root | **Mọi phiên, không cần gõ gì** — lớp duy nhất còn sống khi người dùng quên gọi `/alice` |
+| 3. Gọi tường minh | `.claude/skills/alice/`, `.agents/skills/alice/`, `.opencode/commands/alice.md`, `.gemini/commands/alice.toml` | Khi gõ `/alice <task>` (Claude Code, OpenCode, Gemini CLI) hoặc `$alice <task>` (Codex) |
 
-`knowledge/prompts.md` và adapter phải được commit cùng repo project để cả team dùng chung.
-`wire` chỉ ghi đè file do chính
-ALICE sinh; nếu project đã có command/skill `alice` không mang marker ALICE thì nó dừng, không nuốt
-file của người dùng. Mỗi lần `prompts.md` đổi, chạy lại `npm run wire`.
+Codex hiện **không** ánh xạ repo skill thành slash command trực tiếp `/alice`; dùng `$alice <task>`
+hoặc chọn `alice` trong `/skills`. **Không được báo sai là có.**
+
+Ngoài ra `wire` cài hook `SessionStart` vào `.claude/settings.json` (không đặt matcher nên chạy cho mọi source: `startup`, `resume`, `clear`, `compact`, `fork`), gọi
+`node knowledge/tools/reminder.js` để **nạp lại `ALICE.md` sau mỗi lần auto-compact**. Đây là lớp
+duy nhất chạy ngoài model, nên là thứ duy nhất compaction không xoá được — luật "sau compact phải
+đọc lại" nằm trong context thì chính nó cũng bị compact mất.
+
+Ranh giới ghi file của `wire`:
+
+- File thuộc lớp 1 và lớp 3 chỉ bị ghi đè khi **đã mang marker ALICE**. Project có sẵn `ALICE.md`
+  hoặc command/skill `alice` của người dùng → `wire` dừng trước mọi thao tác ghi, không nuốt file.
+- Ba file lớp 2 chỉ bị thay **khối giữa `<!-- BEGIN ALICE CODING -->` và `<!-- END ALICE CODING -->`**;
+  nội dung khác của người dùng giữ nguyên. Chưa có file thì tạo mới.
+- `.claude/settings.json` được **merge**, không ghi đè: key khác và hook khác giữ nguyên. File hỏng
+  JSON thì `wire` in `SKIP` và bỏ qua đúng phần hook, không phá file.
+
+`knowledge/prompts.md` cùng toàn bộ file sinh ra phải được commit vào repo project để cả team dùng
+chung một bộ luật. Mỗi lần `prompts.md` đổi, chạy lại `npm run wire`.
+
+Kiểm Bước 7 — chưa đủ ba dòng này thì **chưa xong INITIALIZATION**:
+
+- [ ] `npm run wire` exit 0 và in đủ dòng `WIRED`/`UPDATED` cho `ALICE.md`, ba file auto-context và
+      bốn adapter.
+- [ ] Mở thật `ALICE.md` ở root: có nội dung project (không còn `<PROJECT>`), có trỏ tới
+      `knowledge/ALICE.md`.
+- [ ] Báo cho Bệ hạ đúng cú pháp gọi của client Bệ hạ đang dùng, và nói rõ file nào phải commit.
 
 Nhắc Bệ hạ: khi cần delegate, orchestrator dùng [base prompt gọi sub-agent](sub-agents/base-prompt.md), lấy slot cố định từ `ALICE.project.md`.

@@ -71,7 +71,10 @@ URL API mà `npm run brain:status` in ra, thêm `/mcp/`, cùng header
 [../sub-agents/mcp.md](../sub-agents/mcp.md).
 
 ## Bước 4 — Chạy INITIALIZATION (từ desktop agent)
-Mở Claude/Codex desktop trong repo project → *"Đọc và chạy knowledge/INITIALIZATION.md"*. Agent **tinh luyện** repo → `knowledge/` → ingest vào não (Bước 3b) → smoke → in vibe base-prompt.
+Mở Claude/Codex desktop trong repo project → *"Đọc và chạy knowledge/INITIALIZATION.md"*. Agent **tinh luyện** repo → `knowledge/` → ingest vào não (Bước 3b) → smoke → in vibe base-prompt
+và tự chạy `npm run wire` để tạo entry point ALICE theo agent. Claude Code/OpenCode/Gemini dùng
+`/alice <task>`; Codex dùng `$alice <task>` hoặc `/skills` vì Codex không ánh xạ repo skill thành
+slash `/alice` trực tiếp.
 
 ## Đổi cấu hình sau này
 - LLM/embedding: **Settings → Models** trên app (runtime, không cần rebuild).

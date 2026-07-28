@@ -9,7 +9,7 @@
 **Một sản phẩm của [Blueberry Sensei](https://github.com/blueberry-sensei).**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.8-6E56CF)](VERSION)
+[![Version](https://img.shields.io/badge/version-2.4.9-6E56CF)](VERSION)
 [![Engine](https://img.shields.io/badge/engine-ALICE%20CORE-6E56CF)](#alice-core-khác-rag-thường-ở-đâu)
 [![Embedding](https://img.shields.io/badge/embedding-bge--m3%20local-2EA043)](https://huggingface.co/BAAI/bge-m3)
 [![Runtime](https://img.shields.io/badge/runtime-Docker-2496ED?logo=docker&logoColor=white)](#4-cài-đặt)
@@ -326,7 +326,15 @@ nằm trong Docker volume, còn secret nằm trong state directory của user.
 > Đọc và chạy `knowledge/INITIALIZATION.md`.
 
 Agent sẽ quét repo, tinh luyện knowledge, chạy gate, sync vào brain và tự cắm MCP. Khi agent yêu
-cầu, restart agent một lần để config MCP mới có hiệu lực.
+cầu, restart agent một lần để config MCP mới có hiệu lực. Cuối INITIALIZATION, agent cũng chạy
+`npm run wire` để sinh entry point từ base prompt đã bake:
+
+- Claude Code, OpenCode, Gemini CLI: `/alice <task>`;
+- Codex: `$alice <task>` hoặc chọn skill `alice` trong `/skills` (Codex không có slash `/alice`
+  trực tiếp cho repo skill).
+
+Commit `knowledge/prompts.md` cùng các adapter được sinh ở root project; đó là cách mọi thành viên
+và mọi agent nạp cùng một base prompt thay vì mỗi máy tự chép một bản khác nhau.
 
 ---
 
@@ -382,6 +390,7 @@ thấy rõ phần nào đang thay đổi và lỗi nằm ở đâu.
 | `npm run update:dry` | Xem trước update sẽ thay đổi file nào. |
 | `npm run update` | Áp dụng template mới nhưng không đụng file instance của project. |
 | `npm run mcp` | In config MCP; INITIALIZATION thường tự chạy lệnh này cho agent. |
+| `npm run wire` | Sinh/cập nhật entry point ALICE cho các coding agent từ `prompts.md`. |
 
 #### Lệnh phá huỷ — đọc kỹ trước khi chạy
 
@@ -420,6 +429,11 @@ Sau INITIALIZATION, người dùng chỉ cần đưa task. Alice sẽ tự:
 3. thực hiện thay đổi;
 4. verify theo rủi ro;
 5. cập nhật knowledge và sync khi cần.
+
+Nếu muốn nạp lại toàn bộ base prompt đã bake một cách tường minh, dùng `/alice <task>` trên
+Claude Code/OpenCode/Gemini CLI, hoặc `$alice <task>` trên Codex. Đây là entry point theo phiên;
+luật bền của repo vẫn phải nằm trong `AGENTS.md`/`CLAUDE.md` và knowledge, không nên nhét mọi thứ
+vào một slash command.
 
 Các tài liệu chính:
 

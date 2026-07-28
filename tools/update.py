@@ -52,7 +52,9 @@ TEMPLATE_GLOBS = [
     "README.md", "ALICE.md", "INITIALIZATION.md", "UPGRADE.md", "MIGRATIONS.md",
     "package.json",
     "assets/alice-coding.png",
-    "tools/verify.py", "tools/update.py", "tools/cli.js", "tools/verify.config.example",
+    "tools/verify.py", "tools/update.py", "tools/cli.js", "tools/wire.js",
+    "tools/wire.test.js",
+    "tools/verify.config.example",
     "brain/*.md", "brain/brain.config.example", "brain/sync/*.py",
     # `*.js` là bắt buộc: brain-env.js tính danh tính brain và được CẢ HAI launcher gọi.
     # Thiếu nó thì người nâng cấp nhận launcher mới mà không có file nó gọi → brain không dựng được.
@@ -206,7 +208,22 @@ def m_2_4_8(root, dry):
     ]
 
 
-MIGRATIONS = [("2.0.0", m_2_0_0), ("2.4.8", m_2_4_8)]
+def m_2_4_9(root, dry):
+    """2.4.9: sinh entry point agent từ base prompt instance nếu đã init."""
+    del dry
+    if not (root / "prompts.md").exists():
+        return []
+    return [
+        "run `npm run wire` once to generate the project-local ALICE entry points "
+        "from the existing prompts.md"
+    ]
+
+
+MIGRATIONS = [
+    ("2.0.0", m_2_0_0),
+    ("2.4.8", m_2_4_8),
+    ("2.4.9", m_2_4_9),
+]
 
 
 def run_migrations(root, old, new, dry):

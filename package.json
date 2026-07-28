@@ -1,6 +1,6 @@
 {
   "name": "alice-coding",
-  "version": "2.4.8",
+  "version": "2.4.9",
   "private": true,
   "description": "Trí nhớ dài hạn + kỷ luật làm việc cho AI coding agent. npm chỉ là lớp vỏ tiện tay — lõi là Python + Docker.",
   "scripts": {
@@ -28,6 +28,8 @@
     "update:check": "node tools/cli.js update --check",
     "update:dry": "node tools/cli.js update --dry-run",
     "mcp": "node tools/cli.js mcp",
+    "wire": "node tools/wire.js",
+    "test:wire": "node --test tools/wire.test.js",
     "manifest": "node tools/cli.js update --gen-manifest"
   },
   "engines": {

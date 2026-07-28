@@ -23,7 +23,7 @@ flowchart TD
     Gq -->|Có| G["Bước 5 — sync knowledge/ → cắm MCP nếu cần<br/>poll TẤT CẢ READY → smoke + sync lại chống trùng"]
     Gq -->|Không| J
     G --> J["Bước 6 — Tự kiểm & report độ phủ + phần chưa xác minh"]
-    J --> K["Bước 7 — Xuất vibe base-prompt đã bake (A: nạp ký ức · B: rehydrate · C: /knowledge)"]
+    J --> K["Bước 7 — Xuất vibe base-prompt đã bake + wire entry point ALICE cho agent"]
     K --> L(["Xong: mọi agent vibe theo ALICE.md + brain qua MCP"])
 ```
 
@@ -300,7 +300,8 @@ credential, cài phần mềm, hoặc gặp lỗi thật không thể tự xử 
 
 Việc **cuối cùng**: sinh cho Bệ hạ **1 base prompt vibe ĐÃ BAKE hoàn chỉnh cho project này**. Nguyên tắc: mọi thứ **đã điền sẵn** — **Bệ hạ CHỈ cần gõ task ở `## NHIỆM VỤ`**.
 
-Thay `<PROJECT>` bằng tên project thật, in ra trong report, và lưu vào `prompts.md` **của chính project này**. Khung:
+Thay `<PROJECT>` bằng tên project thật, in ra trong report, và lưu vào
+`knowledge/prompts.md` **của chính project này** (`prompts.md` nếu cwd đang ở `knowledge/`). Khung:
 
 ```
 Bạn là Alice, làm theo knowledge/ALICE.md + knowledge/ALICE.project.md trên project <PROJECT>.
@@ -333,4 +334,21 @@ Bạn là Alice, làm theo knowledge/ALICE.md + knowledge/ALICE.project.md trên
 <Bệ hạ chỉ cần điền việc cần làm ở đây>
 ```
 
-Nhắc Bệ hạ: khi cần delegate, orchestrator dùng [base prompt gọi sub-agent](sub-agents/base-prompt.md), lấy slot cố định từ `ALICE.project.md`. Nếu muốn cả team dùng chung prompt vibe, track `prompts.md` trong repo project.
+Sau khi `prompts.md` đã được bake và không còn placeholder, **agent tự chạy**:
+
+```bash
+npm run wire
+```
+
+Lệnh này sinh adapter project-local từ đúng `prompts.md` hiện tại:
+
+- Claude Code, OpenCode và Gemini CLI: `/alice <task>`;
+- Codex: `$alice <task>` hoặc chọn `alice` trong `/skills`. Codex hiện không ánh xạ repo skill
+  thành slash command trực tiếp `/alice`; **không được báo sai là có**.
+
+`knowledge/prompts.md` và adapter phải được commit cùng repo project để cả team dùng chung.
+`wire` chỉ ghi đè file do chính
+ALICE sinh; nếu project đã có command/skill `alice` không mang marker ALICE thì nó dừng, không nuốt
+file của người dùng. Mỗi lần `prompts.md` đổi, chạy lại `npm run wire`.
+
+Nhắc Bệ hạ: khi cần delegate, orchestrator dùng [base prompt gọi sub-agent](sub-agents/base-prompt.md), lấy slot cố định từ `ALICE.project.md`.

@@ -6,6 +6,21 @@ Quy ước version: **semver**. MAJOR đổi = có breaking change bắt buộc 
 
 ---
 
+## 2.4.9 — Entry point ALICE cho coding agent
+
+**Không breaking.** Sau `npm run update`, agent chạy `npm run wire` một lần nếu project đã có
+`prompts.md` từ INITIALIZATION.
+
+`wire` lấy đúng base prompt đã bake của project và sinh adapter project-local cho Claude Code,
+Codex, OpenCode và Gemini CLI. Claude Code/OpenCode/Gemini dùng `/alice <task>`; Codex dùng
+`$alice <task>` hoặc `/skills` vì Codex hiện không có slash `/alice` trực tiếp cho repo skill.
+
+File adapter nên được commit cùng project. Lệnh chỉ cập nhật file có marker ALICE; nếu đã tồn tại
+command/skill `alice` của người dùng, nó dừng rõ ràng và không ghi đè. `prompts.md` từ bản này
+không còn bị `.gitignore` chặn, vì đó là base prompt instance của project chứ không phải file máy.
+
+---
+
 ## 2.4.8 — Telemetry thấy lần ghi tri thức
 
 **Không breaking.** `npm run update` rồi `npm run brain`.

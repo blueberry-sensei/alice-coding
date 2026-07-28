@@ -1,6 +1,8 @@
-# File cục bộ của chủ repo — KHÔNG ship trong template public
+# File luật cục bộ của người bảo trì template — KHÔNG ship trong template public
 AGENTS.md
-prompts.md
+
+# `prompts.md` KHÔNG bị ignore: INITIALIZATION sinh đây là instance của project và
+# `npm run wire` dùng nó để tạo entry point chung cho team.
 
 # Artifact thiết kế cục bộ (brainstorming/specs) — không ship
 docs/superpowers/

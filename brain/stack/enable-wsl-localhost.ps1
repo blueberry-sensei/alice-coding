@@ -1,31 +1,93 @@
-# ALICE CODING — bật WSL "mirrored networking" để http://localhost mở được từ Windows
-# khi Docker chạy bằng Docker CE bên trong WSL (Docker Desktop thì không cần).
-# Chạy MỘT LẦN (PowerShell):  powershell -File knowledge\brain\stack\enable-wsl-localhost.ps1
-# ⚠️ Ghi %USERPROFILE%\.wslconfig và tắt toàn bộ WSL (wsl --shutdown) để áp dụng.
+# ALICE CODING — cấu hình WSL một lần cho Docker CE chạy bên trong Ubuntu.
+# Chạy từ thư mục knowledge bằng PowerShell:
+#   npm run wsl:setup
+#
+# Script chỉ cập nhật + backup %USERPROFILE%\.wslconfig. Nó KHÔNG tự shutdown WSL vì thao tác đó
+# dừng mọi distro/container đang chạy; người dùng chủ động chạy sau khi đã lưu công việc.
 $ErrorActionPreference = "Stop"
 $cfg = Join-Path $env:USERPROFILE ".wslconfig"
+$backup = "$cfg.bak"
 
-Write-Host "Yeu cau: Windows 11 + WSL >= 2.0 (kiem: 'wsl --version'; neu cu: 'wsl --update')." -ForegroundColor Cyan
+function Set-IniValue {
+  param(
+    [string]$Text,
+    [string]$Section,
+    [string]$Key,
+    [string]$Value
+  )
 
-if (Test-Path $cfg) {
-  $c = Get-Content $cfg -Raw
-  if ($c -match "networkingMode") {
-    Write-Host ".wslconfig da co 'networkingMode'. Mo kiem tra cho chac: $cfg" -ForegroundColor Yellow
-    Write-Host "Can dong:  networkingMode=mirrored   (trong muc [wsl2]). Sau do chay: wsl --shutdown"
-    exit 0
+  $normalized = $Text -replace "`r`n", "`n"
+  $lines = New-Object "System.Collections.Generic.List[string]"
+  foreach ($line in ($normalized -split "`n")) {
+    [void]$lines.Add($line)
   }
-  Write-Host ".wslconfig da ton tai — them thu cong 2 dong sau roi luu:" -ForegroundColor Yellow
-  Write-Host "  [wsl2]"
-  Write-Host "  networkingMode=mirrored"
-  Write-Host "File: $cfg   (sau do chay: wsl --shutdown, roi chay lai stack)"
-  exit 0
+
+  $start = -1
+  $end = $lines.Count
+  for ($i = 0; $i -lt $lines.Count; $i++) {
+    if ($lines[$i].Trim() -match '^\[([^\]]+)\]$') {
+      if ($start -ge 0) {
+        $end = $i
+        break
+      }
+      if ($matches[1].Trim() -ieq $Section) {
+        $start = $i
+      }
+    }
+  }
+
+  if ($start -ge 0) {
+    while ($end -gt ($start + 1) -and -not $lines[$end - 1].Trim()) {
+      $end--
+    }
+    for ($i = $start + 1; $i -lt $end; $i++) {
+      $line = $lines[$i].Trim()
+      if (-not $line -or $line.StartsWith("#") -or $line.StartsWith(";")) {
+        continue
+      }
+      $eq = $line.IndexOf("=")
+      if ($eq -gt 0 -and $line.Substring(0, $eq).Trim() -ieq $Key) {
+        $lines[$i] = "$Key=$Value"
+        return (($lines -join "`r`n").TrimEnd() + "`r`n")
+      }
+    }
+    $lines.Insert($end, "$Key=$Value")
+  } else {
+    if ($lines.Count -gt 0 -and $lines[$lines.Count - 1].Trim()) {
+      [void]$lines.Add("")
+    }
+    [void]$lines.Add("[$Section]")
+    [void]$lines.Add("$Key=$Value")
+  }
+
+  return (($lines -join "`r`n").TrimEnd() + "`r`n")
 }
 
-Set-Content $cfg "[wsl2]`r`nnetworkingMode=mirrored`r`n" -Encoding utf8
-Write-Host "Da tao $cfg voi mirrored networking." -ForegroundColor Green
-Write-Host "Tat WSL de ap dung (cac phien WSL dang chay se dong)..." -ForegroundColor Yellow
-wsl --shutdown
+Write-Host "Dang kiem tra/cap nhat WSL..." -ForegroundColor Cyan
+wsl --update
+if ($LASTEXITCODE -ne 0) {
+  Write-Host "Khong cap nhat duoc WSL. Van tiep tuc cau hinh; neu localhost loi, chay lai: wsl --update" -ForegroundColor Yellow
+}
+
+$text = ""
+if (Test-Path $cfg) {
+  Copy-Item -LiteralPath $cfg -Destination $backup -Force
+  $text = Get-Content -LiteralPath $cfg -Raw
+  Write-Host "Da backup: $backup"
+}
+
+$text = Set-IniValue $text "general" "instanceIdleTimeout" "-1"
+$text = Set-IniValue $text "wsl2" "vmIdleTimeout" "-1"
+$text = Set-IniValue $text "wsl2" "networkingMode" "mirrored"
+
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($cfg, $text, $utf8NoBom)
+
+Write-Host "Da cap nhat: $cfg" -ForegroundColor Green
 Write-Host ""
-Write-Host "XONG. Buoc tiep:" -ForegroundColor Green
-Write-Host "  1) bash knowledge/brain/stack/brain-up.sh"
-Write-Host "  2) Open the project URL printed by `npm run brain`"
+Write-Host "Anh huong: mirrored + giu distro/VM WSL chay; ap dung cho TAT CA project." -ForegroundColor Yellow
+Write-Host "Khi da san sang dung moi distro/container WSL, chay:" -ForegroundColor Yellow
+Write-Host "  wsl --shutdown"
+Write-Host "  npm run brain"
+Write-Host ""
+Write-Host "Moi project tu sinh domain *.localhost + port rieng; khong sua hosts/DNS."

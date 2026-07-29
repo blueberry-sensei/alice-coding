@@ -84,17 +84,22 @@ if [ "$BRAIN_MODE" = "dev" ]; then
   export DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1   # additional_contexts cần BuildKit
 fi
 
-# BIND_ADDRESS: 127.0.0.1 ở mọi nơi, TRỪ WSL.
+# BIND_ADDRESS: 127.0.0.1 ở native + WSL mirrored; WSL NAT cần 0.0.0.0.
 #
 # Trong WSL, container publish lên 127.0.0.1 là loopback CỦA DISTRO — relay localhost của WSL2
 # không với tới, nên Windows mở `localhost:<port>` là hỏng. Phải 0.0.0.0 thì mới dùng được.
 #
 # 0.0.0.0 ở đây KHÔNG giống 0.0.0.0 trên máy thật: WSL2 mặc định chạy NAT, distro có IP riêng
 # (172.x) và chỉ Windows host chuyển tiếp vào được — máy khác trong LAN không tới thẳng được.
-# Ngoại lệ là WSL ở chế độ *mirrored networking*: lúc đó nó ĐÚNG là phơi ra LAN.
+# Ngoại lệ là WSL ở chế độ *mirrored networking*: Windows và distro dùng chung localhost,
+# nên bind 127.0.0.1 vừa truy cập được từ Windows vừa không phơi HTTP ra LAN.
 if [ -z "${BIND_ADDRESS:-}" ]; then
   if grep -qiE "microsoft|wsl" /proc/version 2>/dev/null; then
-    BIND_ADDRESS=0.0.0.0
+    if [ "${ALICE_WSL_NETWORK_MODE:-nat}" = "mirrored" ]; then
+      BIND_ADDRESS=127.0.0.1
+    else
+      BIND_ADDRESS=0.0.0.0
+    fi
   else
     BIND_ADDRESS=127.0.0.1
   fi
@@ -103,9 +108,8 @@ fi
 
 if [ "$BIND_ADDRESS" != "127.0.0.1" ]; then
   if grep -qiE "microsoft|wsl" /proc/version 2>/dev/null; then
-    echo "note: BIND_ADDRESS=0.0.0.0 (bắt buộc để Windows mở được localhost qua WSL)."
-    echo "      WSL ở chế độ 'mirrored networking' thì đây là phơi ra LAN qua HTTP trần —"
-    echo "      lúc đó đặt BIND_ADDRESS=127.0.0.1 trong $BRAIN_ENV_FILE và dùng IP của distro."
+    echo "note: BIND_ADDRESS=0.0.0.0 cho WSL NAT để Windows mở được localhost."
+    echo "      Muốn localhost ổn định + chỉ bind loopback: bật mirrored theo GUIDE WSL trong README.md."
   else
     echo "!! WARNING: BIND_ADDRESS=$BIND_ADDRESS exposes the brain off this machine over PLAIN HTTP."
     echo "   API keys typed in the UI would travel the network in the clear. Trusted networks only."
@@ -143,12 +147,16 @@ echo "==> ALICE app: http://${BRAIN_HOST}:${WEB_PORT}"
 echo "==> API + engine log: $BRAIN_LOGS/sag-api.log"
 echo "==> Brain config (OUTSIDE the repo, holds a secret - never commit): $BRAIN_ENV_FILE"
 
-# WSL: VM từng tự tắt kéo theo Docker + brain. Nay xử lý bằng `vmIdleTimeout=-1` trong
-# %USERPROFILE%\.wslconfig (cli.js ghi) — cơ chế chính thức, không cần tiến trình canh.
+# WSL: distro và VM có timeout riêng. cli.js thêm cả `instanceIdleTimeout=-1` lẫn
+# `vmIdleTimeout=-1` vào %USERPROFILE%\.wslconfig; áp dụng sau `wsl --shutdown`.
 if grep -qiE "microsoft|wsl" /proc/version 2>/dev/null; then
-  # localhost-forwarding của WSL2 không phải máy nào cũng chạy. In sẵn URL theo IP distro.
-  WSL_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
-  if [ -n "$WSL_IP" ]; then
-    echo "    localhost not reachable from Windows? Use: http://${WSL_IP}:${WEB_PORT}"
+  if [ "${ALICE_WSL_NETWORK_MODE:-nat}" = "mirrored" ]; then
+    echo "    WSL mirrored: mọi project tự có domain *.localhost; không cần sửa hosts/DNS."
+  else
+    # NAT localhost-forwarding không phải máy nào cũng chạy. In sẵn URL theo IP distro.
+    WSL_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    if [ -n "$WSL_IP" ]; then
+      echo "    localhost not reachable from Windows? Use: http://${WSL_IP}:${WEB_PORT}"
+    fi
   fi
 fi

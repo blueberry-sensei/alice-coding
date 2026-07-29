@@ -9,7 +9,7 @@
 **Một sản phẩm của [Blueberry Sensei](https://github.com/blueberry-sensei).**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.10-6E56CF)](VERSION)
+[![Version](https://img.shields.io/badge/version-2.4.11-6E56CF)](VERSION)
 [![Engine](https://img.shields.io/badge/engine-ALICE%20CORE-6E56CF)](#alice-core-khác-rag-thường-ở-đâu)
 [![Embedding](https://img.shields.io/badge/embedding-bge--m3%20local-2EA043)](https://huggingface.co/BAAI/bge-m3)
 [![Runtime](https://img.shields.io/badge/runtime-Docker-2496ED?logo=docker&logoColor=white)](#4-cài-đặt-trong-10-phút)
@@ -256,9 +256,20 @@ npm run doctor
 npm run brain
 ```
 
-`npm run brain` in ra URL mang danh tính project, ví dụ
-`http://alice-my-project-a1b2c3.localhost:3000`. Hash ngắn tách được hai project trùng tên;
-`.localhost` vẫn chỉ về máy bạn, không cần DNS hay sửa hosts.
+#### Docker CE trong WSL
+
+Nếu `npm run doctor` hiện `Docker CE inside WSL`, chạy **một lần trên mỗi máy**:
+
+```powershell
+npm run wsl:setup
+wsl --shutdown
+npm run brain
+```
+
+Các project sau chỉ cần `npm run brain`; ALICE tự cấp domain và cổng. Lệnh `wsl --shutdown`
+chỉ dừng tạm thời WSL để áp dụng cấu hình, không xoá dữ liệu.
+
+Gặp lỗi? Xem [hướng dẫn kỹ thuật](brain/stack/README.md).
 
 > **Xoá `knowledge/.git` là bắt buộc.** Từ v2, nâng cấp đi qua `npm run update`, không qua
 > `git pull`. Commit `knowledge/` vào repo project — tri thức là tài sản của project.

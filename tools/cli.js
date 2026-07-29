@@ -65,6 +65,102 @@ function findDocker() {
 const brainEnv = require(path.join(STACK, "brain-env.js"));
 
 /**
+ * Docker CE nằm trong WSL thì state + BRAIN_ID cũng phải được đọc trong WSL.
+ * `up` vốn đã chạy brain-up.sh trong distro; các lệnh quản trị phải đi cùng runtime,
+ * nếu không D:\project và /mnt/d/project sinh hai hash + hai state root khác nhau.
+ */
+const WSL_DELEGATED_COMMANDS = new Set([
+  "down", "restart", "logs", "status", "list", "pull", "uninstall",
+]);
+
+function runSelfInWsl(args) {
+  return run("wsl", [
+    "-e", "bash", "-c",
+    'PATH="$HOME/.local/alice-node/bin:$PATH"; exec node tools/cli.js "$@"',
+    "alice-cli", ...args,
+  ]);
+}
+
+function peekBrainInWsl() {
+  const r = tryRun("wsl", [
+    "-e", "bash", "-c",
+    'PATH="$HOME/.local/alice-node/bin:$PATH"; exec node brain/stack/brain-env.js --peek-json',
+  ], { cwd: ROOT });
+  if (!r.ok) return null;
+  try { return JSON.parse(r.out); } catch { return null; }
+}
+
+function runtimeBrainInfo(d = findDocker()) {
+  if (IS_WIN && d && d.kind === "wsl") {
+    const info = peekBrainInWsl();
+    if (info) return info;
+  }
+  return brainEnv.peek();
+}
+
+function readWslConfig() {
+  const home = process.env.USERPROFILE;
+  if (!home) return { file: "", text: "" };
+  const file = path.join(home, ".wslconfig");
+  try { return { file, text: fs.readFileSync(file, "utf8").replace(/^\uFEFF/, "") }; }
+  catch { return { file, text: "" }; }
+}
+
+function iniValue(text, section, key) {
+  let current = "";
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    const header = line.match(/^\[([^\]]+)\]$/);
+    if (header) {
+      current = header[1].trim().toLowerCase();
+      continue;
+    }
+    if (current !== section.toLowerCase() || line.startsWith("#") || line.startsWith(";")) continue;
+    const eq = line.indexOf("=");
+    if (eq < 1 || line.slice(0, eq).trim().toLowerCase() !== key.toLowerCase()) continue;
+    return line.slice(eq + 1).trim();
+  }
+  return "";
+}
+
+/** Thêm setting còn thiếu vào đúng section, không ghi đè lựa chọn có chủ đích của người dùng. */
+function addIniSetting(text, section, key, value) {
+  const lines = text ? text.replace(/\r\n/g, "\n").split("\n") : [];
+  let start = -1;
+  let end = lines.length;
+  for (let i = 0; i < lines.length; i += 1) {
+    const header = lines[i].trim().match(/^\[([^\]]+)\]$/);
+    if (!header) continue;
+    if (start >= 0) {
+      end = i;
+      break;
+    }
+    if (header[1].trim().toLowerCase() === section.toLowerCase()) start = i;
+  }
+  if (start >= 0) {
+    while (end > start + 1 && !lines[end - 1].trim()) end -= 1;
+    for (let i = start + 1; i < end; i += 1) {
+      const line = lines[i].trim();
+      if (line.startsWith("#") || line.startsWith(";")) continue;
+      const eq = line.indexOf("=");
+      if (eq > 0 && line.slice(0, eq).trim().toLowerCase() === key.toLowerCase()) {
+        return { text, changed: false };
+      }
+    }
+    lines.splice(end, 0, `${key}=${value}`);
+  } else {
+    if (lines.length && lines[lines.length - 1].trim()) lines.push("");
+    lines.push(`[${section}]`, `${key}=${value}`);
+  }
+  return { text: `${lines.join("\n").replace(/\n+$/, "")}\n`, changed: true };
+}
+
+function wslNetworkMode() {
+  const { text } = readWslConfig();
+  return (iniValue(text, "wsl2", "networkingMode") || "nat").toLowerCase();
+}
+
+/**
  * Bộ biến môi trường cho `docker compose`, đọc từ file .env của brain — file này nằm NGOÀI
  * repo (thư mục state của người dùng) vì nó chứa SAG_SECRET_KEY.
  *
@@ -332,35 +428,33 @@ function get(url, ms = 2500) {
  * (`pgrep` không thấy gì), và `uptime` trong distro luôn "up 0 min" → VM tắt/bật liên tục,
  * kéo theo Docker và brain. Vá bằng tiến trình canh là sai hướng.
  *
- * `vmIdleTimeout=-1` trong `%USERPROFILE%\.wslconfig` bảo WSL đừng tắt VM khi rảnh. Đây là
- * file cấu hình của người dùng nên chỉ THÊM khoá còn thiếu, không ghi đè cái đang có.
+ * `instanceIdleTimeout=-1` giữ distro; `vmIdleTimeout=-1` giữ VM chung. Thiếu một trong hai thì
+ * systemd + Docker vẫn có thể dừng ngay khi lệnh `wsl.exe` cuối cùng thoát. File cấu hình của người
+ * dùng nên chỉ THÊM khoá còn thiếu, không ghi đè cái đang có.
  * Có hiệu lực sau `wsl --shutdown` một lần.
  *
  * @returns {boolean} true nếu vừa sửa file (người dùng cần `wsl --shutdown`).
  */
 function ensureWslNeverIdles() {
-  const home = process.env.USERPROFILE;
-  if (!home) return false;
-  const file = path.join(home, ".wslconfig");
-  let text = "";
-  try { text = fs.readFileSync(file, "utf8"); } catch { /* chưa có thì tạo mới */ }
-  if (/^\s*vmIdleTimeout\s*=/mi.test(text)) return false;
-
-  const line = "vmIdleTimeout=-1";
-  const NL = "\n";
-  let next;
-  if (/^\s*\[wsl2\]/mi.test(text)) {
-    next = text.replace(/^[ \t]*\[wsl2\].*$/mi, (m) => m + NL + line);
-  } else {
-    const head = text.trim() ? text.trimEnd() + NL + NL : "";
-    next = head + "[wsl2]" + NL + line + NL;
+  const { file, text } = readWslConfig();
+  if (!file) return false;
+  let next = text;
+  const added = [];
+  for (const [section, key] of [
+    ["general", "instanceIdleTimeout"],
+    ["wsl2", "vmIdleTimeout"],
+  ]) {
+    const result = addIniSetting(next, section, key, "-1");
+    next = result.text;
+    if (result.changed) added.push(`[${section}] ${key}=-1`);
   }
+  if (!added.length) return false;
   try {
-    fs.writeFileSync(file, next);
-    console.log(C.y(`Đã thêm ${line} vào ${file} — WSL sẽ không tự tắt VM nữa.`));
+    fs.writeFileSync(file, next, "utf8");
+    console.log(C.y(`Đã thêm ${added.join(" + ")} vào ${file}.`));
     return true;
   } catch (err) {
-    console.log(C.y(`Không ghi được ${file} (${err.message}). Thêm tay: [wsl2] / ${line}`));
+    console.log(C.y(`Không ghi được ${file} (${err.message}). Xem GUIDE WSL trong README.md.`));
     return false;
   }
 }
@@ -395,7 +489,11 @@ function up() {
     }
     console.log(C.d("→ brain-up.sh inside WSL (Docker CE)"));
     const needsShutdown = ensureWslNeverIdles();
-    const code = run("wsl", ["-e", "bash", "brain/stack/brain-up.sh"]);
+    const networkMode = wslNetworkMode();
+    const code = run("wsl", [
+      "-e", "env", `ALICE_WSL_NETWORK_MODE=${networkMode}`,
+      "bash", "brain/stack/brain-up.sh",
+    ]);
     if (code === 0 && needsShutdown) {
       console.log(C.y("\nCấu hình WSL vừa đổi. Chạy MỘT lần rồi dựng lại thì brain mới thôi tự chết:"));
       console.log(C.b("  wsl --shutdown"));
@@ -423,6 +521,12 @@ async function status() {
   console.log(`  ${info.BRAIN_ID}` + (info.exists ? "" : C.y("  [never built]")));
   console.log(C.d(`  mode: ${info.BRAIN_MODE === "dev" ? "dev - built from local sources" : "published image"}`));
   console.log(C.b("\nContainer:"));
+  if (!info.exists) {
+    console.log(C.d("  (not built)"));
+    console.log(C.b("\nServices:"));
+    console.log(C.d("  (not available - run npm run brain)"));
+    return 0;
+  }
   if (d) run(d.cmd, [...d.pre, "ps", "--filter",
                      `label=com.docker.compose.project=${info.BRAIN_ID}`,
                      "--format", "  {{.Names}}\t{{.Status}}"]);
@@ -470,11 +574,12 @@ async function list() {
 function mcp() {
   const d = findDocker();
   const wsl = d && d.kind === "wsl";
+  const info = runtimeBrainInfo(d);
   const cmd = wsl ? "wsl" : "docker";
   // `-e SAG_MCP_ACTOR=<agent>` only labels the telemetry rows (Settings -> Telemetry) so the
   // brain can tell which agent asked for what. It grants nothing; auth is still the JWT/scope.
   const argsFor = (actor) => {
-    const base = ["exec", "-i", "-e", `SAG_MCP_ACTOR=${actor}`, `${brainEnv.brainId()}-api-1`, "python", "-m", "sag_api.mcp.server"];
+    const base = ["exec", "-i", "-e", `SAG_MCP_ACTOR=${actor}`, `${info.BRAIN_ID}-api-1`, "python", "-m", "sag_api.mcp.server"];
     return wsl ? ["-e", "docker", ...base] : base;
   };
   console.log(C.b("MCP configuration for your agent (stdio bridge)\n"));
@@ -510,7 +615,7 @@ async function doctor() {
   const cfg = fs.existsSync(path.join(ROOT, "brain", "brain.config"));
   console.log(`[${cfg ? OK : WARN}] brain.config ${cfg ? "present" : "missing - copy brain/brain.config.example when you need sync"}`);
 
-  const info = brainEnv.peek();
+  const info = runtimeBrainInfo(d);
   const ready = info.exists
     ? await get(`http://localhost:${info.API_PORT}/api/v1/system/ready`)
     : null;
@@ -543,7 +648,7 @@ async function doctor() {
 }
 
 function sync(args) {
-  const info = brainEnv.peek();
+  const info = runtimeBrainInfo();
   if (!info.exists) {
     console.error(C.r("This project's brain has never been built."));
     console.error("Run this first: " + C.b("npm run brain"));
@@ -564,6 +669,10 @@ function sync(args) {
 
 const [cmd, ...rest] = process.argv.slice(2);
 (async () => {
+  if (IS_WIN && WSL_DELEGATED_COMMANDS.has(cmd)) {
+    const d = findDocker();
+    if (d && d.kind === "wsl") process.exit(runSelfInWsl([cmd, ...rest]));
+  }
   switch (cmd) {
     case "up":       process.exit(up());
     case "down":     process.exit(compose(["down"]));

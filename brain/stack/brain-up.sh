@@ -17,12 +17,17 @@ STACK="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$STACK"
 
 # Ghi toàn bộ output ra file: dựng stack lỗi ở bước nào (Docker, pull, build) thì còn cái mà
-# đọc sau khi terminal đã đóng. Không có `tee` thì chạy tiếp, chỉ mất log.
+# đọc sau khi terminal đã đóng. Tránh process substitution `>(tee ...)`: đây là cú pháp dễ chết
+# ngay lúc parse trên một số môi trường macOS/shell wrapper, trong khi logging chỉ là tính năng phụ.
+# Re-exec đúng Bash rồi pipe cả tiến trình qua tee; `pipefail` giữ nguyên exit code thật.
 LOG_DIR="$(cd "$STACK/.." && pwd)/.logs"
 LOG_FILE="$LOG_DIR/brain-up.log"
-if command -v tee >/dev/null 2>&1 && mkdir -p "$LOG_DIR" 2>/dev/null; then
-  exec > >(tee -a "$LOG_FILE") 2>&1
-else
+if [ "${ALICE_BRAIN_LOG_WRAPPED:-0}" != "1" ] \
+  && command -v tee >/dev/null 2>&1 \
+  && mkdir -p "$LOG_DIR" 2>/dev/null; then
+  ALICE_BRAIN_LOG_WRAPPED=1 bash "$0" "$@" 2>&1 | tee -a "$LOG_FILE"
+  exit $?
+elif [ "${ALICE_BRAIN_LOG_WRAPPED:-0}" != "1" ]; then
   echo "[log] Cannot write the log file; console output only."
   LOG_FILE=""
 fi

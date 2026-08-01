@@ -9,7 +9,7 @@
 **Một sản phẩm của [Blueberry Sensei](https://github.com/blueberry-sensei).**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.10-6E56CF)](VERSION)
+[![Version](https://img.shields.io/badge/version-2.4.12-6E56CF)](VERSION)
 [![Engine](https://img.shields.io/badge/engine-ALICE%20CORE-6E56CF)](#alice-core-khác-rag-thường-ở-đâu)
 [![Embedding](https://img.shields.io/badge/embedding-bge--m3%20local-2EA043)](https://huggingface.co/BAAI/bge-m3)
 [![Runtime](https://img.shields.io/badge/runtime-Docker-2496ED?logo=docker&logoColor=white)](#4-cài-đặt-trong-10-phút)
@@ -155,6 +155,10 @@ Nói gọn: Alice không chỉ hỏi *“đoạn nào giống câu này?”* mà
 Trong **Settings → Models**, bạn xếp nhiều provider/model theo thứ tự ưu tiên; chuỗi đó dùng cho cả
 đường trả lời lẫn đường trích xuất tri thức.
 
+Nút **Xuất/Nhập cấu hình** giúp chép nhanh provider, model, endpoint và tham số sang project khác.
+Có hai chế độ: bản thường bỏ API key và chỉ điền form để review; bản **Xuất kèm key** được mã hoá
+AES-256-GCM bằng mật khẩu do bạn đặt, nên project khác nhập được key mà browser không nhận plaintext.
+
 | Provider gặp | Alice làm |
 |---|---|
 | Timeout / lỗi tạm thời | Thử lại có giới hạn trên cùng provider |
@@ -174,6 +178,10 @@ việc cho sub-agent rồi thu kết quả về cùng context.
 để biết slot nào dùng được, rồi `ask_sub_agent` để giao một task phân tích/review. Credential được
 giải mã **bên trong Brain** — không rơi ra prompt, không rơi ra biến môi trường của máy.
 
+Registry cũng có hai chế độ xuất. Bundle mã hoá mang theo credential; khi nhập sang project mới,
+mọi slot bị tắt cho tới khi tải và xác thực lại model live — không phải gõ lại key nhưng cũng không
+tự tin mù quáng rằng catalog provider chưa đổi.
+
 Ranh giới không nói quá: sub-agent qua Brain chỉ thấy `task` + `context` được truyền vào, **không có
 filesystem** và không tự sửa code. Việc cần đọc/sửa file vẫn chạy qua CLI trên host bằng auth riêng
 của CLI, và orchestrator phải khai bằng `log_agent_task`.
@@ -186,6 +194,8 @@ file; lần nào gọi sub-agent qua Brain.
 
 Chi phí chưa biết giá thì ghi **unknown**, không giả vờ bằng `0`. Telemetry bắt tại lớp gọi model
 dùng chung nên thấy cả đường trích xuất chạy bên trong ALICE CORE, không chỉ chat.
+Danh sách lịch sử tải thêm theo trang; nút **Xuất báo cáo** gom toàn bộ record trong khoảng ngày đang
+chọn thành JSON để review hoặc lưu bằng chứng.
 
 ### Local-first, không tự dối mình
 

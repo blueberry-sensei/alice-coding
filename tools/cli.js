@@ -423,10 +423,25 @@ async function status() {
   console.log(`  ${info.BRAIN_ID}` + (info.exists ? "" : C.y("  [never built]")));
   console.log(C.d(`  mode: ${info.BRAIN_MODE === "dev" ? "dev - built from local sources" : "published image"}`));
   console.log(C.b("\nContainer:"));
-  if (d) run(d.cmd, [...d.pre, "ps", "--filter",
-                     `label=com.docker.compose.project=${info.BRAIN_ID}`,
-                     "--format", "  {{.Names}}\t{{.Status}}"]);
-  else console.log(C.r("  Docker not found."));
+  let containerNames = [];
+  if (d) {
+    const ps = tryRun(d.cmd, [...d.pre, "ps", "--filter",
+      `label=com.docker.compose.project=${info.BRAIN_ID}`,
+      "--format", "{{.Names}}"]).out;
+    containerNames = ps.split(/\r?\n/).map((name) => name.trim()).filter(Boolean);
+    if (containerNames.length) {
+      run(d.cmd, [...d.pre, "ps", "--filter",
+        `label=com.docker.compose.project=${info.BRAIN_ID}`,
+        "--format", "  {{.Names}}\t{{.Status}}"]);
+      console.log(C.b("\nResources:"));
+      run(d.cmd, [...d.pre, "stats", "--no-stream",
+        "--format", "  {{.Name}}\tRAM {{.MemUsage}}\tPIDs {{.PIDs}}\tI/O {{.BlockIO}}",
+        ...containerNames]);
+      console.log(C.d("  RAM above is separate from Docker disk images, volumes, and build cache."));
+    } else {
+      console.log(C.y("  No running containers."));
+    }
+  } else console.log(C.r("  Docker not found."));
   console.log(C.b("\nServices:"));
   const probes = [
     ["API", `http://${info.BRAIN_HOST}:${info.API_PORT}`, `http://localhost:${info.API_PORT}`, "/api/v1/system/ready"],

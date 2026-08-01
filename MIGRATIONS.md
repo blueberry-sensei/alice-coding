@@ -6,6 +6,24 @@ Quy ước version: **semver**. MAJOR đổi = có breaking change bắt buộc 
 
 ---
 
+## 2.4.12 — Launcher macOS và quan sát tài nguyên Docker
+
+**Không breaking.** Chạy `npm run update`, rồi `npm run brain` để Compose áp log rotation mới.
+
+- Launcher macOS/Linux không còn dùng process substitution `>(tee ...)` cho log, tránh lỗi cú pháp
+  trước khi Docker kịp chạy trên các shell wrapper không hỗ trợ đúng cú pháp này.
+- `npm run brain:status` in RAM, số process và I/O của từng container để phân biệt RAM runtime với
+  image, volume và build cache trên đĩa.
+- Docker JSON log tự xoay vòng; có thể override `ALICE_DOCKER_LOG_MAX_SIZE` và
+  `ALICE_DOCKER_LOG_MAX_FILES` trong file brain `.env`.
+- Bản này **không áp trần RAM/core dump theo service**: chưa có benchmark đủ đại diện để chứng minh
+  một con số cố định không giết retrieval/ingest hợp lệ trên project lớn.
+- Settings → Models/Sub-agents có thêm **Xuất kèm key**: API mã hoá credential bằng passphrase
+  người dùng với scrypt + AES-256-GCM. Plaintext chỉ sống trong API process; bundle và browser chỉ
+  thấy ciphertext. Sub-agent nhập sang bị tắt cho tới khi verify lại model live.
+
+---
+
 ## 2.4.10 — Luật ALICE tự nạp mỗi phiên và sống qua auto-compact
 
 **Không breaking.** Sau `npm run update`, agent chạy `npm run wire` một lần.

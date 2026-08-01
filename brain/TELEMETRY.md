@@ -71,6 +71,10 @@ Ai không cắm MCP thì dùng đường HTTP tương đương: `POST /api/v1/te
 
 ## 4. Đọc trang Telemetry thế nào
 
+Hai danh sách mở với 50 bản ghi mới nhất; **Tải thêm** dùng pagination để đọc lịch sử cũ mà không
+đẩy một payload lớn vào browser ngay từ đầu. **Xuất báo cáo** tải toàn bộ request LLM và hoạt động
+agent trong khoảng 1/7/30 ngày đang chọn thành JSON, kèm summary và thời điểm export.
+
 | Thấy gì | Nghĩa là |
 |---|---|
 | `extraction` chiếm gần hết chi phí | Bình thường — tinh luyện là phần đắt nhất. So với số tài liệu đã ingest để biết đắt bất thường không. |

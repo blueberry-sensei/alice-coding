@@ -61,7 +61,7 @@ sạch API key đã lưu).
 
 ## Vận hành
 ```bash
-npm run brain:status     # trạng thái container
+npm run brain:status     # trạng thái, RAM Docker báo, process và I/O của container
 npm run brain:logs       # log của cả stack
 npm run brain:restart    # khởi động lại
 npm run brain:down       # tắt (giữ data)
@@ -82,6 +82,21 @@ npm run brain:down       # tắt (giữ data)
   "gỡ rồi mà đĩa vẫn đầy". Build cache dùng chung cả máy nên nếu đang có project Docker khác thì
   thêm `--keep-cache` để giữ (chỉ mất tốc độ build lần sau, không mất dữ liệu).
 - Dừng: `npm run brain:down` (giữ data). Xem log container: `npm run brain:logs`.
+
+## Quan sát tài nguyên và dung lượng
+
+`npm run brain:status` in lượng RAM, process và block I/O Docker đang báo cho từng container.
+Con số sau dấu `/` của Docker có thể là giới hạn chung Docker Desktop cấp cho VM, **không phải**
+benchmark hay trần riêng mà ALICE tự chọn.
+
+ALICE chưa áp trần RAM hay tắt core dump theo service khi chưa có benchmark đủ đại diện cho
+retrieval/ingest project lớn. Guardrail duy nhất ở đây là Docker JSON log xoay vòng 10 MB × 3 file
+mỗi container để log không phình vô hạn; chỉnh bằng `ALICE_DOCKER_LOG_MAX_SIZE` và
+`ALICE_DOCKER_LOG_MAX_FILES` trong file brain `.env`, rồi chạy `npm run brain` để áp lại.
+
+Nếu Docker Desktop báo hàng chục GB nhưng RAM container vẫn bình thường, phân biệt rõ
+**RAM container**, **named volume dữ liệu**, **image** và **build cache**
+trước khi xoá; `npm run uninstall:yes` là thao tác phá huỷ runtime/volume, không phải nút chẩn đoán.
 - Mất data vẫn dựng lại được từ file: `npm run sync:rebuild`.
 
 ## Log ra file

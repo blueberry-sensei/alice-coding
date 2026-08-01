@@ -113,9 +113,11 @@ trước khi xoá; `npm run uninstall:yes` là thao tác phá huỷ runtime/volu
 Stack gồm **toàn container Linux** nên **giống hệt** trên cả hai máy. Chỉ 2 điểm phụ thuộc máy:
 
 1. **Chạy launcher đúng môi trường của daemon:**
-   - **Docker CE trong WSL** (không có `docker` trên Windows PATH) → chạy `npm run brain` **bên trong WSL**.
+   - **Docker CE trong WSL** (không có `docker` trên Windows PATH) → gọi `npm run brain` từ
+     PowerShell hoặc WSL đều được; CLI Windows tự chuyển các lệnh quản trị vào đúng distro.
    - **Docker Desktop** (`docker` có trên Windows) → chạy `npm run brain` ở đâu cũng được.
-   - Nguyên tắc: launcher tính path theo môi trường nó chạy → **đừng trộn** (đừng chạy từ Windows khi daemon chỉ nằm trong WSL).
+   - Identity/state luôn được tính tại nơi Docker daemon chạy, nên `D:\project` và `/mnt/d/project`
+     không còn tạo hai brain khác nhau.
 2. **`.env` của brain là per-máy và nằm NGOÀI repo.** Mặc định để trống là tốt nhất — launcher kéo image dựng sẵn. Chỉ người phát triển chính alice-brain/alice-core mới cần `ALICE_APP_PATH` + `ALICE_CORE_PATH` (phải đặt **cả hai**): WSL dùng path Linux (`/mnt/d/...` hoặc `~/...`), Desktop+PowerShell dùng `D:/...`.
 
 **Hiệu năng (WSL CE):** để repo trong **filesystem của WSL** (`~/...`) thay vì `/mnt/d/...` (bind-mount 9p chậm). Dữ liệu não nay nằm trong named volume nên không còn dính bind-mount 9p.
@@ -126,17 +128,34 @@ Stack gồm **toàn container Linux** nên **giống hệt** trên cả hai máy
 
 ## Mở được từ trình duyệt Windows khi Docker CE chạy trong WSL
 
-**Nguyên nhân thật (đã xác minh, KHÔNG phải firewall):** `localhost` từ Windows tới WSL chạy
-bình thường. Vấn đề duy nhất: **WSL VM tự tắt khi không còn phiên nào mở** → docker + brain tắt
-theo → lúc đó mở localhost mới lỗi.
+Chạy một lần trong PowerShell:
 
-**Launcher đã tự xử lý:** `npm run brain` để lại một tiến trình nền (`alice-brain-keepalive`)
-trong distro nên VM sống tiếp và **terminal được trả về ngay** — không phải giữ cửa sổ nào mở.
-Tắt hẳn: `npm run brain:down`.
+```powershell
+npm run wsl:setup
+wsl --shutdown
+npm run brain
+```
 
-> ⚠️ **Node phải cài BÊN TRONG WSL.** Docker nằm trong distro nên launcher cũng chạy ở đó;
-> Node cài trên Windows không dùng được. Cài trong WSL:
-> `curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt install -y nodejs`
+Nếu `%USERPROFILE%\.wslconfig` đã tồn tại, script backup thành `.wslconfig.bak`, rồi cấu hình:
+
+```ini
+[general]
+instanceIdleTimeout=-1
+
+[wsl2]
+vmIdleTimeout=-1
+networkingMode=mirrored
+```
+
+`instanceIdleTimeout` giữ distro, `vmIdleTimeout` giữ VM chung; thiếu một trong hai thì systemd,
+Docker và brain vẫn có thể dừng khi lệnh WSL cuối cùng thoát. Mirrored networking cho Windows và
+WSL dùng chung localhost; launcher tự bind `127.0.0.1`, không phơi HTTP ra LAN.
+
+> `wsl --shutdown` dừng tạm thời **mọi distro/container WSL** để áp dụng cấu hình, nhưng không xoá
+> Docker volume. Mỗi project sau đó tự có domain `*.localhost` + port riêng; không sửa hosts/DNS.
+
+> **Node phải có bên trong WSL**, nhưng không cần cài tay: `npm run brain` tự cài bản Node riêng
+> vào `~/.local/alice-node` khi distro chưa có Node.
 
 Muốn bền hơn nữa thì cho Docker CE chạy qua **systemd**: `/etc/wsl.conf` thêm `[boot]` +
 `systemd=true`, rồi `sudo systemctl enable --now docker`.

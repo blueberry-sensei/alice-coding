@@ -322,6 +322,11 @@ function quotePs(value) {
 
 async function main() {
   const mode = process.argv[2] || "--json";
+  if (mode === "--peek-json") {
+    process.stdout.write(`${JSON.stringify(peek(), null, 2)}\n`);
+    return;
+  }
+
   const env = await resolve();
   delete env._migrated;
 

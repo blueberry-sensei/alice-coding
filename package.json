@@ -13,6 +13,7 @@
     "brain:list": "node tools/cli.js list",
     "brain:logs": "node tools/cli.js logs",
     "brain:pull": "node tools/cli.js pull",
+    "wsl:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File brain/stack/enable-wsl-localhost.ps1",
     "uninstall": "node tools/cli.js uninstall",
     "uninstall:yes": "node tools/cli.js uninstall --yes",
     "uninstall:keep-cache": "node tools/cli.js uninstall --yes --keep-cache",

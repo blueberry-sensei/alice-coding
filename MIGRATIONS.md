@@ -6,6 +6,27 @@ Quy ước version: **semver**. MAJOR đổi = có breaking change bắt buộc 
 
 ---
 
+## 2.4.13 — `npm run brain` không còn phụ thuộc thư mục hiện hành của WSL
+
+**Không breaking.** Chạy `npm run update`, rồi `npm run brain` như bình thường.
+
+Khi Docker chạy dưới dạng Docker CE **trong distro WSL**, launcher phải chạy trong distro đó. Bản cũ
+gọi nó bằng đường dẫn tương đối (`bash brain/stack/brain-up.sh`) và tin rằng WSL luôn mang được thư
+mục hiện hành của Windows sang. Điều đó không đúng với mọi distro: tắt `[automount]`, đổi
+`[automount] root`, hay đơn giản là ổ chưa được mount đều khiến thư mục hiện hành rơi về `/` hoặc
+`$HOME`. Khi đó lệnh chỉ báo `bash: brain/stack/brain-up.sh: No such file or directory` — nghe như
+mất file, trong khi file vẫn nằm nguyên trong repo.
+
+- Launcher, lệnh quản trị chuyển tiếp vào WSL và bước đọc danh tính brain nay đều dịch đường dẫn
+  project sang đường dẫn tuyệt đối của distro rồi mới chạy.
+- Distro không nhìn thấy thư mục project thì dừng ngay với thông báo chỉ đúng chỗ phải sửa
+  (`ls /mnt`, `[automount]` trong `/etc/wsl.conf`), thay vì để shell báo thiếu file.
+- Distro nội bộ của Docker Desktop (`docker-desktop`) không còn bị nhận nhầm là "Docker CE inside
+  WSL". Đó là distro rootfs tối giản, mount ổ Windows ở đường dẫn khác và Docker Desktop không hỗ
+  trợ gọi CLI từ đó.
+
+---
+
 ## 2.4.12 — Launcher macOS và quan sát tài nguyên Docker
 
 **Không breaking.** Chạy `npm run update`, rồi `npm run brain` để Compose áp log rotation mới.

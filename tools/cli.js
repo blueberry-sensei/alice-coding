@@ -51,15 +51,70 @@ function findPython() {
   return null;
 }
 
+/**
+ * Distro nội bộ của Docker Desktop. Nó KHÔNG phải nơi chạy launcher: rootfs tối giản
+ * (có thể không có bash), và ổ Windows được mount ở `/mnt/host/<drive>` chứ không phải
+ * `/mnt/<drive>`. Docker Desktop cũng nói thẳng là không hỗ trợ gọi CLI từ đó.
+ */
+const WSL_INTERNAL_DISTROS = new Set(["docker-desktop", "docker-desktop-data"]);
+
+function wslDistroName() {
+  const r = tryRun("wsl", ["-e", "sh", "-c", "printf %s \"$WSL_DISTRO_NAME\""]);
+  return r.ok ? r.out.trim() : "";
+}
+
 /** Docker Desktop/native trước; Windows thì thử tiếp Docker CE trong WSL. */
 function findDocker() {
   const native = tryRun("docker", ["version", "--format", "{{.Server.Version}}"]);
   if (native.ok) return { kind: "native", cmd: "docker", pre: [], version: native.out };
-  if (IS_WIN) {
+  if (IS_WIN && !WSL_INTERNAL_DISTROS.has(wslDistroName())) {
     const wsl = tryRun("wsl", ["-e", "docker", "version", "--format", "{{.Server.Version}}"]);
     if (wsl.ok) return { kind: "wsl", cmd: "wsl", pre: ["-e", "docker"], version: wsl.out };
   }
   return null;
+}
+
+/**
+ * Đường dẫn của project NHÌN TỪ TRONG distro.
+ *
+ * `wsl.exe` chỉ mang cwd Windows sang distro khi thư mục đó thật sự tồn tại ở đó. Distro
+ * tắt `[automount]`, đổi `[automount] root`, hay chỉ mount ổ ở đường dẫn khác đều làm cwd
+ * rơi về `/` hoặc `$HOME`. Lúc đó mọi đường dẫn TƯƠNG ĐỐI truyền vào WSL đều trỏ sai và
+ * bash chỉ nói `No such file or directory` — không hề nói vì sao, nên người dùng đi tìm
+ * file trong repo (nó vẫn ở đó) thay vì đi xem mount của distro.
+ *
+ * Vì vậy: dịch sang đường dẫn tuyệt đối của distro và kiểm tra nó tồn tại TRƯỚC khi chạy.
+ * @returns {string|null} đường dẫn POSIX của ROOT trong distro, null nếu distro không thấy.
+ */
+let wslRootCache;
+function wslRoot() {
+  if (wslRootCache !== undefined) return wslRootCache;
+  const candidates = [];
+  // `wslpath` là câu trả lời chính thức của distro, nhưng không phải lúc nào cũng dùng được:
+  // distro nội bộ của Docker Desktop trả một đường dẫn chỉ có nghĩa bên trong engine.
+  const probe = tryRun("wsl", ["-e", "wslpath", "-a", ROOT]);
+  if (probe.ok && probe.out) candidates.push(probe.out.split(/\r?\n/)[0].trim());
+  const drive = /^([A-Za-z]):[\\/](.*)$/.exec(ROOT);
+  if (drive) candidates.push(`/mnt/${drive[1].toLowerCase()}/${drive[2].replace(/\\/g, "/")}`);
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const seen = tryRun("wsl", ["-e", "sh", "-c", '[ -d "$1" ]', "alice-probe", candidate]);
+    if (seen.ok) return (wslRootCache = candidate);
+  }
+  return (wslRootCache = null);
+}
+
+function wslRootMissing() {
+  console.error(C.r("This project folder is not visible from inside WSL."));
+  console.error(`  Windows path : ${ROOT}`);
+  console.error("  Docker runs inside the WSL distro, so the launcher has to run there too -");
+  console.error("  and the distro cannot reach this folder.");
+  console.error("  Open a WSL terminal and check that the drive is mounted:");
+  console.error(C.b("    ls /mnt"));
+  console.error("  If the drive is missing, enable automount in /etc/wsl.conf, then `wsl --shutdown`:");
+  console.error(C.b("    [automount]\n    enabled = true\n    root = /mnt/"));
+  console.error("  Or move the project onto a drive the distro can see.");
+  return 1;
 }
 
 const brainEnv = require(path.join(STACK, "brain-env.js"));
@@ -74,18 +129,23 @@ const WSL_DELEGATED_COMMANDS = new Set([
 ]);
 
 function runSelfInWsl(args) {
+  const root = wslRoot();
+  if (!root) return wslRootMissing();
   return run("wsl", [
     "-e", "bash", "-c",
-    'PATH="$HOME/.local/alice-node/bin:$PATH"; exec node tools/cli.js "$@"',
-    "alice-cli", ...args,
+    'cd "$1" || exit 1; shift; PATH="$HOME/.local/alice-node/bin:$PATH"; exec node tools/cli.js "$@"',
+    "alice-cli", root, ...args,
   ]);
 }
 
 function peekBrainInWsl() {
+  const root = wslRoot();
+  if (!root) return null;
   const r = tryRun("wsl", [
     "-e", "bash", "-c",
-    'PATH="$HOME/.local/alice-node/bin:$PATH"; exec node brain/stack/brain-env.js --peek-json',
-  ], { cwd: ROOT });
+    'PATH="$HOME/.local/alice-node/bin:$PATH"; exec node "$1/brain/stack/brain-env.js" --peek-json',
+    "alice-peek", root,
+  ]);
   if (!r.ok) return null;
   try { return JSON.parse(r.out); } catch { return null; }
 }
@@ -482,20 +542,22 @@ function up() {
     // Node do launcher cài nằm ở $HOME/.local/alice-node/bin — shell không-login của
     // `wsl -e` không có nó trong PATH, nên phải hỏi qua đúng PATH đó, kẻo lần nào cũng báo
     // "chưa có" dù đã cài.
+    const root = wslRoot();
+    if (!root) return wslRootMissing();
     const nodeProbe = tryRun("wsl", ["-e", "bash", "-c",
       'PATH="$HOME/.local/alice-node/bin:$PATH" node --version']);
     if (!nodeProbe.ok) {
-      console.log(C.y("Node chưa có trong WSL — launcher sẽ tự cài (không cần sudo)."));
+      console.log(C.y("Node is missing inside WSL - the launcher installs it (no sudo needed)."));
     }
     console.log(C.d("→ brain-up.sh inside WSL (Docker CE)"));
     const needsShutdown = ensureWslNeverIdles();
     const networkMode = wslNetworkMode();
     const code = run("wsl", [
       "-e", "env", `ALICE_WSL_NETWORK_MODE=${networkMode}`,
-      "bash", "brain/stack/brain-up.sh",
+      "bash", `${root}/brain/stack/brain-up.sh`,
     ]);
     if (code === 0 && needsShutdown) {
-      console.log(C.y("\nCấu hình WSL vừa đổi. Chạy MỘT lần rồi dựng lại thì brain mới thôi tự chết:"));
+      console.log(C.y("\nWSL settings changed. Run this ONCE, then start again - the brain will stop dying:"));
       console.log(C.b("  wsl --shutdown"));
       console.log(C.b("  npm run brain"));
     }

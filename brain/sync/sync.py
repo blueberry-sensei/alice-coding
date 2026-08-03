@@ -111,6 +111,7 @@ DEFAULTS = {
     "BRAIN_INCLUDE": "wiki,mistakes,decisions,context,changelog",
     "BRAIN_EXCLUDE": "_TEMPLATE.md",
     "STATE_FILE": str(BRAIN_DIR / ".sync-state.json"),
+    "BRAIN_SYNC_TIMEOUT": os.environ.get("BRAIN_SYNC_TIMEOUT", "180"),
 }
 
 
@@ -136,14 +137,16 @@ def load_config(path):
     return cfg
 
 
-def http(method, url, token=None, data=None):
+def http(method, url, token=None, data=None, timeout=None):
+    if timeout is None:
+        timeout = int(os.environ.get("BRAIN_SYNC_TIMEOUT", "180"))
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = "Bearer " + token
     body = json.dumps(data).encode("utf-8") if data is not None else None
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=180) as r:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
             raw = r.read().decode("utf-8")
             return json.loads(raw) if raw else {}
     except urllib.error.HTTPError as e:
@@ -358,13 +361,21 @@ def main():
         seen.add(r)
         h = hashlib.sha256(p.read_bytes()).hexdigest()
         entry = state["files"].get(r)
-        if entry and entry.get("sha256") == h and not args.rebuild:
+        # Only skip if the document actually exists in the brain. Skipping when
+        # state says "done" but the document was deleted by a previous crashed run
+        # is the root cause of silent data loss — the agent trusts missing memory.
+        if entry and entry.get("sha256") == h and entry.get("document_id") and not args.rebuild:
             skipped += 1
             continue
-        if entry and entry.get("document_id"):        # đổi -> xoá cũ trước
-            delete_doc(cfg, token, source_id, entry["document_id"])
+        # Ingest the new document FIRST — never leave a gap.
         doc_id = ingest(cfg, token, source_id, r, p.read_text(encoding="utf-8"))
+        old_doc_id = entry.get("document_id") if entry else None
         state["files"][r] = {"document_id": doc_id, "sha256": h}
+        # Save state per file so a crash never loses all progress.
+        save_state(cfg, state)
+        # Delete old document only after the new one exists and state reflects it.
+        if old_doc_id and old_doc_id != doc_id:
+            delete_doc(cfg, token, source_id, old_doc_id)
         if entry:
             updated.append(r)
             print("  ~ update %s" % r)

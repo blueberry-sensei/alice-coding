@@ -173,8 +173,24 @@ def check_citations(rep, cfg, do_fix):
                         continue
                     target = resolve(cpath, md, code_root)
                     if target is None:
-                        rep.error("C1", "citation points at a missing file: `%s`" % code,
-                                  rel_md, lineno)
+                        msg = ("citation points at a missing file: `%s`"
+                               " (paths must be relative to the repo root,"
+                               " e.g. `brain/sync/sync.py`)" % code)
+                        # If one file with that basename exists anywhere, suggest it.
+                        basename = Path(cpath).name
+                        candidates = []
+                        for base_dir in (md.parent, ROOT, code_root):
+                            try:
+                                for hit in base_dir.rglob(basename):
+                                    if hit.is_file():
+                                        candidates.append(hit.relative_to(ROOT).as_posix())
+                            except OSError:
+                                continue
+                        if len(candidates) == 1:
+                            msg += " — did you mean `%s`?" % candidates[0]
+                        elif len(candidates) > 1:
+                            msg += " — found: %s" % ", ".join(sorted(candidates)[:5])
+                        rep.error("C1", msg, rel_md, lineno)
                         continue
                     if cline is None:
                         continue

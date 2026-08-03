@@ -519,7 +519,7 @@ function ensureWslNeverIdles() {
   }
 }
 
-function up() {
+async function up() {
   const d = findDocker();
   if (!d) {
     console.error(C.r("No running Docker daemon found."));
@@ -528,20 +528,12 @@ function up() {
     return 1;
   }
   console.log(C.d(`Docker: ${d.kind} (server ${d.version})`));
+  let launcherCode = 0;
   if (IS_WIN && d.kind === "native") {
     console.log(C.d("→ brain-up.ps1 (Windows + Docker Desktop)"));
-    return run("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass",
+    launcherCode = run("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass",
                               "-File", path.join(STACK, "brain-up.ps1")]);
-  }
-  if (IS_WIN && d.kind === "wsl") {
-    // Docker nằm TRONG distro, nên launcher chạy trong đó luôn — và mọi thứ nó cần
-    // (Node, đường dẫn) phải là của Linux, không phải của Windows. Node trên Windows
-    // KHÔNG dùng được ở đây; đó là lý do phải dò riêng thay vì để script tự chết.
-    // Không chặn ở đây: `brain-up.sh` tự cài Node vào $HOME của distro khi thiếu. Chỉ báo
-    // trước để người dùng biết vì sao lần chạy đầu lâu hơn.
-    // Node do launcher cài nằm ở $HOME/.local/alice-node/bin — shell không-login của
-    // `wsl -e` không có nó trong PATH, nên phải hỏi qua đúng PATH đó, kẻo lần nào cũng báo
-    // "chưa có" dù đã cài.
+  } else if (IS_WIN && d.kind === "wsl") {
     const root = wslRoot();
     if (!root) return wslRootMissing();
     const nodeProbe = tryRun("wsl", ["-e", "bash", "-c",
@@ -552,19 +544,52 @@ function up() {
     console.log(C.d("→ brain-up.sh inside WSL (Docker CE)"));
     const needsShutdown = ensureWslNeverIdles();
     const networkMode = wslNetworkMode();
-    const code = run("wsl", [
+    launcherCode = run("wsl", [
       "-e", "env", `ALICE_WSL_NETWORK_MODE=${networkMode}`,
       "bash", `${root}/brain/stack/brain-up.sh`,
     ]);
-    if (code === 0 && needsShutdown) {
+    if (launcherCode === 0 && needsShutdown) {
       console.log(C.y("\nWSL settings changed. Run this ONCE, then start again - the brain will stop dying:"));
       console.log(C.b("  wsl --shutdown"));
       console.log(C.b("  npm run brain"));
     }
-    return code;
+  } else {
+    console.log(C.d("→ brain-up.sh"));
+    launcherCode = run("bash", [path.join(STACK, "brain-up.sh")]);
   }
-  console.log(C.d("→ brain-up.sh"));
-  return run("bash", [path.join(STACK, "brain-up.sh")]);
+  if (launcherCode !== 0) return launcherCode;
+
+  // Wait for the brain to become ready — the launcher exits once containers are up,
+  // but the API may still be pulling models or extracting entities.
+  const info = brainEnv.peek();
+  const readyUrl = `http://localhost:${info.API_PORT}/api/v1/system/ready`;
+  console.log(C.d("\nWaiting for the brain to become ready..."));
+  const deadline = Date.now() + 120_000; // 2 minutes — covers model pulls (bge-m3 ~1.2 GB)
+  let lastStatus = "";
+  while (Date.now() < deadline) {
+    const res = await get(readyUrl, 3000);
+    if (res && res.status === 200) {
+      try {
+        const body = JSON.parse(res.body);
+        if (body.status === "ready") {
+          console.log(C.g(`  Brain is ready (${info.BRAIN_HOST}:${info.API_PORT})`));
+          return 0;
+        }
+        if (body.status !== lastStatus) {
+          console.log(C.d(`  ${body.status}...`));
+          lastStatus = body.status;
+        }
+      } catch (_) {
+        console.log(C.d("  ..."));
+      }
+    } else {
+      console.log(C.d("  ..."));
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  console.log(C.y("\nBrain did not become ready within 2 minutes — it may still be pulling models."));
+  console.log(C.d("Check: docker compose ps   |   Wait and run: npm run brain:status"));
+  return 0;
 }
 
 function python(scriptRel, args, opts = {}) {
@@ -751,7 +776,7 @@ const [cmd, ...rest] = process.argv.slice(2);
     if (d && d.kind === "wsl") process.exit(runSelfInWsl([cmd, ...rest]));
   }
   switch (cmd) {
-    case "up":       process.exit(up());
+    case "up":       process.exit(await up());
     case "down":     process.exit(compose(["down"]));
     case "restart":  process.exit(compose(["restart"]));
     case "logs":     process.exit(compose(["logs", "-f", "--tail", "100", ...rest]));

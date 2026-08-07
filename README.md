@@ -286,10 +286,12 @@ Docker Desktop dùng thẳng, không cần bước nào thêm. Còn Colima thì 
 `input/output error` chứ không báo hết chỗ. Tạo VM **trước khi** chạy `npm run brain`:
 
 ```bash
-colima start --vm-type vz --vz-rosetta --cpu 4 --memory 8 --disk 100
+colima start --vm-type vz --vz-rosetta --cpu 4 --memory 8 --disk 60
 ```
 
-`--vz-rosetta` để chạy image amd64 trên Mac Apple Silicon (cần macOS 13+). Nếu VM đã trót tạo
+`--vz-rosetta` để chạy image amd64 trên Mac Apple Silicon (cần macOS 13+). Kiểm tra `df -h /`
+còn ~20 GB trống trước khi chạy: đĩa host đầy sẽ hiện ra thành lỗi I/O chứ không phải báo hết
+chỗ, rất dễ tưởng nhầm là lỗi mạng. Nếu VM đã trót tạo
 với mặc định thì phải `colima delete` rồi tạo lại — thao tác này xoá cả volume dữ liệu, xem
 [hướng dẫn kỹ thuật](brain/stack/README.md) để sao lưu trước.
 

@@ -150,13 +150,29 @@ Ngoài ra image `api`/`web` được publish cho **linux/amd64**, nên Mac Apple
 Tạo VM bằng lệnh này (cần macOS 13+ cho `vz`):
 
 ```bash
-colima start --vm-type vz --vz-rosetta --cpu 4 --memory 8 --disk 100
+colima start --vm-type vz --vz-rosetta --cpu 4 --memory 8 --disk 60
 ```
+
+`--disk` chỉ là **trần** của đĩa ảo, không chiếm trước; nhưng đĩa host phải còn chỗ thật để nó
+nở ra. Stack ăn khoảng 8–10 GB trong VM, nên hãy chắc `df -h /` còn dư ~20 GB trước khi chạy.
+Đĩa host đầy là nguyên nhân phổ biến nhất của cả hai lỗi ở trên, và macOS **không** báo
+"no space left" ở tầng Docker — nó lòi ra dưới dạng lỗi I/O nên rất dễ đổ nhầm cho mạng.
 
 VM đang chạy rồi thì `colima start` **không** đổi được tài nguyên; phải `colima delete` rồi tạo
 lại. `colima delete` **xoá luôn image và named volume**, tức là mất "não" — sao lưu trước bằng
 lệnh `docker run --rm -v <BRAIN_ID>_sagdata ... tar czf` ở mục *Dữ liệu & vòng đời* bên trên.
 Có bản sao lưu tri thức thì `npm run sync:rebuild` cũng dựng lại được từ file.
+
+Ngược lại, `colima delete` **không** xoá cache image của Colima. Nếu `colima start` chết ở
+`failed to download ...` hoặc lỗi giải nén, đó là file tải dở còn kẹt trong cache — delete rồi
+tạo lại bao nhiêu lần cũng vấp đúng file ấy. Xoá tay rồi start lại:
+
+```bash
+rm -rf ~/Library/Caches/colima ~/Library/Caches/lima
+```
+
+Máy hỏng nhiều file không liên quan nhau (cache Colima, blob containerd) trong cùng một buổi thì
+kiểm tra `df -h /` và Disk Utility → First Aid trước khi đổ cho ALICE hay cho mạng.
 
 ## Mở được từ trình duyệt Windows khi Docker CE chạy trong WSL
 

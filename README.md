@@ -279,6 +279,20 @@ npm run brain
 Các project sau chỉ cần `npm run brain`; ALICE tự cấp domain và cổng. Lệnh `wsl --shutdown`
 chỉ dừng tạm thời WSL để áp dụng cấu hình, không xoá dữ liệu.
 
+#### Colima trên macOS
+
+Docker Desktop dùng thẳng, không cần bước nào thêm. Còn Colima thì mặc định chỉ cấp
+2 CPU / 2 GiB RAM / 60 GiB disk — thiếu cho stack này, và khi đĩa VM đầy Docker sẽ báo
+`input/output error` chứ không báo hết chỗ. Tạo VM **trước khi** chạy `npm run brain`:
+
+```bash
+colima start --vm-type vz --vz-rosetta --cpu 4 --memory 8 --disk 100
+```
+
+`--vz-rosetta` để chạy image amd64 trên Mac Apple Silicon (cần macOS 13+). Nếu VM đã trót tạo
+với mặc định thì phải `colima delete` rồi tạo lại — thao tác này xoá cả volume dữ liệu, xem
+[hướng dẫn kỹ thuật](brain/stack/README.md) để sao lưu trước.
+
 Gặp lỗi? Xem [hướng dẫn kỹ thuật](brain/stack/README.md).
 
 > **Xoá `knowledge/.git` là bắt buộc.** Từ v2, nâng cấp đi qua `npm run update`, không qua

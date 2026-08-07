@@ -126,6 +126,38 @@ Stack gồm **toàn container Linux** nên **giống hệt** trên cả hai máy
 
 **GPU (tùy chọn):** CPU chạy mặc định cả hai. Muốn tăng tốc embedding thì bật GPU cho service `embedding` (Desktop: WSL2 GPU; WSL CE: nvidia-container-toolkit).
 
+## macOS: Docker Desktop hay Colima
+
+**Docker Desktop** không cần bước nào thêm — mặc định của nó đã đủ chỗ và tự lo phần chạy
+image amd64.
+
+**Colima** thì phải khai báo tài nguyên lúc tạo VM, vì mặc định của Colima
+(**2 CPU · 2 GiB RAM · 60 GiB disk**) nhỏ hơn nhu cầu của stack này. Kiểm tra máy đang có gì:
+
+```bash
+colima status && colima ssh -- df -h /var/lib
+```
+
+Hai chỗ mặc định Colima làm ALICE gãy:
+
+1. **RAM 2 GiB không đủ.** Service `embedding` chạy `bge-m3` qua Ollama, cộng `api` và `web`
+   nữa. Hết RAM thì container bị OOM-kill, thường là ngay sau bước pull model.
+2. **Đĩa 60 GiB dễ đầy**, và lúc đầy thì Docker **không** báo "no space left" mà báo
+   `input/output error` khi đọc blob trong `/var/lib/containerd/...`. Đó là lỗi ghi xuống đĩa ảo
+   của VM, không phải lỗi mạng hay lỗi image trên registry — đừng đi sửa network.
+
+Ngoài ra image `api`/`web` được publish cho **linux/amd64**, nên Mac Apple Silicon cần Rosetta.
+Tạo VM bằng lệnh này (cần macOS 13+ cho `vz`):
+
+```bash
+colima start --vm-type vz --vz-rosetta --cpu 4 --memory 8 --disk 100
+```
+
+VM đang chạy rồi thì `colima start` **không** đổi được tài nguyên; phải `colima delete` rồi tạo
+lại. `colima delete` **xoá luôn image và named volume**, tức là mất "não" — sao lưu trước bằng
+lệnh `docker run --rm -v <BRAIN_ID>_sagdata ... tar czf` ở mục *Dữ liệu & vòng đời* bên trên.
+Có bản sao lưu tri thức thì `npm run sync:rebuild` cũng dựng lại được từ file.
+
 ## Mở được từ trình duyệt Windows khi Docker CE chạy trong WSL
 
 Chạy một lần trong PowerShell:

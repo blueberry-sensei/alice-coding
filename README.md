@@ -9,7 +9,7 @@
 **Một sản phẩm của [Blueberry Sensei](https://github.com/blueberry-sensei).**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.16-6E56CF)](VERSION)
+[![Version](https://img.shields.io/badge/version-2.4.17-6E56CF)](VERSION)
 [![Engine](https://img.shields.io/badge/engine-ALICE%20CORE-6E56CF)](#alice-core-khác-rag-thường-ở-đâu)
 [![Embedding](https://img.shields.io/badge/embedding-bge--m3%20local-2EA043)](https://huggingface.co/BAAI/bge-m3)
 [![Runtime](https://img.shields.io/badge/runtime-Docker-2496ED?logo=docker&logoColor=white)](#4-cài-đặt-trong-10-phút)
@@ -401,7 +401,8 @@ tách rời để biết lỗi nằm ở đâu.
 
 **Embedding:** `embedding` (chế độ + model đã tải + brain nào đang gắn vào) ·
 `embedding:reclaim` (thu hồi container không còn ai dùng) ·
-`embedding:down:yes` (tắt container embedding **dùng chung cả máy** — ảnh hưởng mọi project).
+`embedding:down:yes` (tắt container embedding **dùng chung cả máy** — ảnh hưởng mọi project) ·
+`embedding:purge:yes` (**xoá model đã tải để lấy lại đĩa**, ~1,2 GB mỗi bản; không đụng tri thức).
 Mặc định một container Ollama cho **cả máy**, không phải cho mỗi project; đã có embedding API
 riêng thì khai `SAG_EMBEDDING_BASE_URL` trong `.env` của brain và ALICE **không dựng, không tải**
 gì cả. Đổi endpoint trong app thì `npm run brain` **tự tắt** container thừa, và tự dựng lại khi
@@ -434,6 +435,7 @@ skill `/alice` từ `prompts.md`).
 | Search rỗng sau khi đổi embedding | `npm run sync:rebuild` |
 | Model embedding chưa tải xong | `npm run brain:pull` |
 | Đã có embedding API riêng mà ALICE vẫn dựng Ollama | khai `SAG_EMBEDDING_BASE_URL` trong `.env` của brain → `npm run brain` |
+| Đĩa đầy vì model embedding cũ (~1,2 GB mỗi bản) | `npm run embedding:purge:yes` |
 | Sửa `.env` mà không thấy đổi gì | giá trị lưu trong DB đang thắng — xem cảnh báo ở **Settings → Models** |
 | `/alice` không có trong agent | `npm run wire` rồi restart agent |
 

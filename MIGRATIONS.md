@@ -22,7 +22,8 @@ Nay `npm run brain` tự đối chiếu và tự chỉnh, **cả hai chiều**:
 | Bỏ endpoint riêng trong app | Tự gỡ ghi nhớ đó và dựng lại container ở lượt `npm run brain` kế tiếp |
 
 - Chỉ `stop`, **không** xoá volume: model đã tải được giữ, bật lại là chạy ngay. Muốn lấy lại
-  ~1,2 GB đĩa thì `docker volume rm alice-embedding-models`.
+  đĩa thì `npm run embedding:purge:yes` — lệnh này xoá cả model dùng chung lẫn volume
+  `<BRAIN_ID>_ollama` còn sót từ thời mỗi project một Ollama (~1,2 GB mỗi bản).
 - ALICE chỉ tự gỡ thứ **chính nó** đặt. `ALICE_EMBEDDING_MODE` do người dùng khai bằng tay
   không bao giờ bị đụng tới.
 - Chạy tay bất cứ lúc nào: `npm run embedding:reclaim`. Xem trạng thái: `npm run embedding`.
@@ -63,8 +64,8 @@ Dữ liệu vẫn cách ly tuyệt đối như cũ (DB, vector index, upload n�
 
 - Ở chế độ `shared`, lần `npm run brain` đầu tiên sau khi nâng cấp tải model vào volume chung một
   lần nữa (~1,2 GB). Từ project thứ hai trở đi bước này xong ngay. Chế độ `external` không tải gì.
-- Volume `<BRAIN_ID>_ollama` cũ **không bị xoá tự động**. Xoá tay khi đã chắc:
-  `docker volume rm <BRAIN_ID>_ollama` cho từng brain (mỗi cái ~1,2 GB).
+- Volume `<BRAIN_ID>_ollama` cũ **không bị xoá tự động**. Xoá khi đã chắc:
+  `npm run embedding:purge:yes` (mỗi cái ~1,2 GB).
 - Muốn giữ nguyên cách cũ: thêm `ALICE_EMBEDDING_MODE=project` vào `.env` của brain.
 - Lệnh mới: `npm run embedding` (chế độ + brain nào đang gắn vào),
   `npm run embedding:down:yes` (tắt — ảnh hưởng mọi project).

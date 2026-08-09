@@ -73,6 +73,7 @@ của project khác.
 ```bash
 npm run embedding             # chế độ, container, model đã tải, brain nào đang gắn vào
 npm run embedding:down:yes    # tắt embedding dùng chung — ẢNH HƯỞNG MỌI PROJECT (giữ model)
+npm run embedding:purge:yes   # xoá model đã tải để lấy lại đĩa (~1,2 GB mỗi bản)
 ```
 
 Container dùng chung **không publish cổng ra host**: brain nói chuyện với nó qua network nội bộ,

@@ -126,7 +126,7 @@ const brainEnv = require(path.join(STACK, "brain-env.js"));
  */
 const WSL_DELEGATED_COMMANDS = new Set([
   "down", "restart", "logs", "status", "list", "pull", "uninstall",
-  "embedding", "embedding-down", "embedding-reclaim",
+  "embedding", "embedding-down", "embedding-reclaim", "embedding-purge",
 ]);
 
 function runSelfInWsl(args) {
@@ -534,7 +534,7 @@ async function reconcileEmbedding(info) {
   if (hub(["stop"]) === 0) {
     console.log(C.g("  Stopped the shared embedding container - no brain on this machine needs it."));
     console.log(C.d("  Downloaded models were kept; it starts again by itself when a brain needs one."));
-    console.log(C.d("  Reclaim that disk space too: docker volume rm alice-embedding-models"));
+    console.log(C.d("  Reclaim that disk space too: npm run embedding:purge:yes"));
   }
 }
 
@@ -553,6 +553,59 @@ function embeddingDown(argv) {
   const rc = hub(["down"]);
   if (rc === 0) console.log(C.g("Shared embedding stopped. Downloaded models were kept."));
   return rc;
+}
+
+/**
+ * Xoá model embedding đã tải để lấy lại dung lượng đĩa.
+ *
+ * Gồm cả volume dùng chung `alice-embedding-models` lẫn volume `<BRAIN_ID>_ollama` còn sót lại
+ * từ thời mỗi project một Ollama — mỗi cái ~1,2 GB và không còn ai dùng sau khi chuyển sang
+ * embedding dùng chung.
+ *
+ * Docker tự từ chối xoá volume đang được container dùng, nên volume của brain đang chạy không
+ * thể bị xoá nhầm; ở đây chỉ báo lại và bỏ qua.
+ */
+function embeddingPurge(argv) {
+  const yes = argv.includes("--yes") || argv.includes("-y");
+  const d = findDocker();
+  if (!d) { console.error(C.r("Docker not found.") + " Run `npm run doctor`."); return 1; }
+
+  const volumes = tryRun(d.cmd, [...d.pre, "volume", "ls", "-q"]).out
+    .split(/\r?\n/)
+    .map((name) => name.trim())
+    .filter((name) => name === "alice-embedding-models" || /_ollama$/.test(name));
+
+  if (!volumes.length) {
+    console.log(C.g("No downloaded embedding model is taking up space."));
+    return 0;
+  }
+
+  console.log(C.b("Will delete these downloaded embedding models:"));
+  for (const name of volumes) console.log(`  - ${name}  ${C.d("~1.2 GB")}`);
+  console.log(C.d("\nOnly the downloaded model files. No knowledge, no brain data is touched."));
+  console.log(C.y("Any brain that still needs one downloads it again on the next `npm run brain`."));
+
+  if (!yes) {
+    console.log("If you are sure, run: " + C.b("npm run embedding:purge:yes"));
+    return 2;
+  }
+
+  let removed = 0;
+  let inUse = 0;
+  for (const name of volumes) {
+    const r = tryRun(d.cmd, [...d.pre, "volume", "rm", name]);
+    if (r.ok) {
+      removed += 1;
+      continue;
+    }
+    // Đang có container dùng -> Docker từ chối. Đó là lưới an toàn, không phải lỗi.
+    inUse += 1;
+    console.log(C.y(`  kept ${name}`) + C.d(" - a running container still uses it"));
+  }
+  console.log(C.g(`\nDeleted ${removed} model volume(s).`)
+    + (inUse ? C.d(` ${inUse} kept because they are in use.`) : ""));
+  if (inUse) console.log(C.d("Stop those brains (npm run brain:down) and run this again to reclaim them."));
+  return 0;
 }
 
 /**
@@ -1079,6 +1132,7 @@ const [cmd, ...rest] = process.argv.slice(2);
       process.exit(0);
     }
     case "embedding-down": process.exit(embeddingDown(rest));
+    case "embedding-purge": process.exit(embeddingPurge(rest));
     case "verify":   process.exit(python("tools/verify.py", rest));
     case "sync":     process.exit(sync(rest));
     case "update":   process.exit(python("tools/update.py", rest));
@@ -1096,6 +1150,7 @@ const [cmd, ...rest] = process.argv.slice(2);
   embedding status of the embedding container (shared machine-wide by default)
   embedding-reclaim  stop the embedding container when the saved config no longer uses it
   embedding-down  stop the SHARED embedding container (affects every project)  needs --yes
+  embedding-purge delete downloaded embedding models to reclaim disk space  needs --yes
   uninstall remove Docker + brain runtime (KEEPS knowledge)   needs --yes
   reset     DELETE project knowledge + pull a fresh template  needs --yes
   verify    check the knowledge base   sync    push files into the brain

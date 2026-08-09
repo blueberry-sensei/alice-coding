@@ -126,7 +126,7 @@ const brainEnv = require(path.join(STACK, "brain-env.js"));
  */
 const WSL_DELEGATED_COMMANDS = new Set([
   "down", "restart", "logs", "status", "list", "pull", "uninstall",
-  "embedding", "embedding-down",
+  "embedding", "embedding-down", "embedding-reclaim",
 ]);
 
 function runSelfInWsl(args) {
@@ -376,6 +376,13 @@ async function embedding() {
     console.log(C.d("    then: npm run brain"));
     return 0;
   }
+  // Chế độ ở trên đọc từ `.env`; cái đang THỰC SỰ chạy có thể khác vì cấu hình lưu trong app
+  // ghi đè. Nói ra chênh lệch đó, đừng để người dùng tự đoán.
+  const info = brainEnv.peek();
+  if (info.exists && (await usesBundledEmbedding(info.API_PORT)) === false && mode !== "external") {
+    console.log(C.y("\n  In effect: this brain uses an endpoint saved in the app, NOT this container."));
+    console.log(C.d("  The container is running for nothing. Reclaim it: ") + C.b("npm run embedding:reclaim"));
+  }
   if (!d) { console.log(C.r("\n  Docker not found.")); return 1; }
   console.log(C.b("\nShared container:"));
   const ps = tryRun(d.cmd, [...d.pre, "ps", "-a", "--filter",
@@ -404,6 +411,131 @@ async function embedding() {
   console.log(attached.length ? attached.map((name) => "  " + name).join("\n")
                               : C.d("  (no brain is running right now)"));
   return 0;
+}
+
+/**
+ * Đánh dấu "chế độ external là do ALICE tự đặt, không phải người dùng chọn".
+ *
+ * Cần phân biệt vì chỉ thứ ALICE tự đặt mới được ALICE tự gỡ. Người dùng khai
+ * `ALICE_EMBEDDING_MODE=project`/`external` bằng tay thì đó là quyết định của họ.
+ */
+const AUTO_EXTERNAL_KEY = "ALICE_EMBEDDING_MODE_SET_BY_ALICE";
+
+function autoExternal() {
+  const info = brainEnv.peek();
+  if (!info.exists) return false;
+  try {
+    return fs.readFileSync(info.BRAIN_ENV_FILE, "utf8")
+      .split(/\r?\n/)
+      .some((line) => new RegExp(`^\\s*${AUTO_EXTERNAL_KEY}\\s*=\\s*1\\s*$`).test(line));
+  } catch {
+    return false;
+  }
+}
+
+/** Ghi/xoá một khoá trong .env của brain, giữ nguyên mọi dòng khác. */
+function setBrainEnvValue(key, value) {
+  const info = brainEnv.peek();
+  if (!info.exists) return false;
+  let lines;
+  try {
+    lines = fs.readFileSync(info.BRAIN_ENV_FILE, "utf8").split(/\r?\n/);
+  } catch {
+    return false;
+  }
+  const re = new RegExp(`^\\s*${key}\\s*=`);
+  const next = lines.filter((line) => !re.test(line));
+  // Bỏ dòng trống ở cuối trước khi ghi thêm, kẻo mỗi lần chạy lại nhét thêm một dòng trắng.
+  while (next.length && !next[next.length - 1].trim()) next.pop();
+  if (value !== null) next.push(`${key}=${value}`);
+  try {
+    fs.writeFileSync(info.BRAIN_ENV_FILE, `${next.join("\n")}\n`, { mode: 0o600 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Cờ `embedding_uses_bundled_container` của một brain đang chạy; null nếu không hỏi được. */
+async function usesBundledEmbedding(apiPort) {
+  const res = await get(`http://localhost:${apiPort}/api/v1/system/capabilities`, 3000);
+  if (!res || res.status !== 200) return null;
+  try {
+    const body = JSON.parse(res.body);
+    // Field chỉ có từ 2.4.16. Brain cũ trả undefined -> coi như "không biết" và KHÔNG đụng gì.
+    const flag = body.embedding_uses_bundled_container;
+    return typeof flag === "boolean" ? flag : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Thu hồi container embedding không còn ai dùng.
+ *
+ * Vì sao cần: endpoint embedding có thể được đổi trong app (Settings → Models, hoặc import config),
+ * mà launcher chỉ đọc `.env`. Không có bước này thì đổi sang API riêng xong, container Ollama vẫn
+ * chạy và model 1,2 GB vẫn nằm đó — chạy không công, đúng thứ phải tránh.
+ *
+ * Hai ràng buộc an toàn:
+ * - chỉ tắt embedding DÙNG CHUNG khi **không brain nào khác** còn dùng nó;
+ * - chỉ `stop`, không `down -v`: network vẫn còn cho brain đang gắn, model đã tải không bị xoá.
+ */
+async function reconcileEmbedding(info) {
+  const mode = embeddingModeHere();
+  const usesBundled = await usesBundledEmbedding(info.API_PORT);
+  if (usesBundled === null) return;   // brain cũ hoặc chạy ngoài stack -> không kết luận gì
+
+  // ── Chiều 2: brain CẦN container nhưng ta đang ở external do tự ghi trước đó ──
+  // Xảy ra khi người dùng bỏ endpoint riêng trong app. Không có nhánh này thì brain kẹt ở
+  // external mà không còn embedding nào, và lỗi chỉ lộ ra lúc ingest.
+  if (usesBundled === true) {
+    if (mode === "external" && autoExternal()) {
+      setBrainEnvValue("ALICE_EMBEDDING_MODE", null);
+      setBrainEnvValue(AUTO_EXTERNAL_KEY, null);
+      console.log(C.y("\nThis brain needs the bundled embedding container again"));
+      console.log(C.y("(the endpoint saved in the app is gone). Run `npm run brain` once more."));
+    }
+    return;
+  }
+
+  // ── Chiều 1: container đang chạy không công ──
+  if (mode === "external") return;   // đã ở external, không có gì để thu hồi
+  console.log(C.y("\nThis brain's saved configuration points embedding somewhere else,"));
+  console.log(C.y("so the embedding container ALICE started for it is doing nothing."));
+
+  // Ghi lại vào .env để lần chạy sau KHÔNG dựng lên nữa, thay vì bật rồi tắt mỗi lượt.
+  // Đánh dấu là do ALICE tự đặt, để còn tự gỡ được; lựa chọn của người dùng thì không đụng.
+  if (setBrainEnvValue("ALICE_EMBEDDING_MODE", "external")) {
+    setBrainEnvValue(AUTO_EXTERNAL_KEY, "1");
+    console.log(C.d("  It will not be started again while the app points somewhere else."));
+  }
+
+  const d = findDocker();
+  if (!d) return;
+
+  if (mode === "project") {
+    compose(["rm", "-sf", "embedding"]);
+    console.log(C.g("  Stopped and removed this project's embedding container."));
+    return;
+  }
+
+  // Chế độ shared: container là của CẢ MÁY. Hỏi từng brain khác trước khi đụng vào.
+  const others = brainEnv.listBrains().filter((brain) => brain.id !== info.BRAIN_ID);
+  for (const brain of others) {
+    if (await usesBundledEmbedding(brain.api) === true) {
+      console.log(C.d(`  Keeping the shared container: ${brain.id} still uses it.`));
+      return;
+    }
+  }
+  const running = tryRun(d.cmd, [...d.pre, "ps", "-q", "--filter",
+    `label=com.docker.compose.project=${brainEnv.EMBEDDING_HUB_PROJECT}`]).out.trim();
+  if (!running) return;
+  if (hub(["stop"]) === 0) {
+    console.log(C.g("  Stopped the shared embedding container - no brain on this machine needs it."));
+    console.log(C.d("  Downloaded models were kept; it starts again by itself when a brain needs one."));
+    console.log(C.d("  Reclaim that disk space too: docker volume rm alice-embedding-models"));
+  }
 }
 
 /** Tắt embedding dùng chung — ảnh hưởng MỌI project trên máy, nên phải nói rõ. */
@@ -720,6 +852,9 @@ async function up() {
         const body = JSON.parse(res.body);
         if (body.status === "ready") {
           console.log(C.g(`  Brain is ready (${info.BRAIN_HOST}:${info.API_PORT})`));
+          // Brain đã trả lời được thì mới biết endpoint embedding NÀO đang thực sự có hiệu lực —
+          // giá trị đó nằm trong DB, launcher không đọc được từ `.env`.
+          await reconcileEmbedding(info);
           return 0;
         }
         if (body.status !== lastStatus) {
@@ -937,6 +1072,12 @@ const [cmd, ...rest] = process.argv.slice(2);
     case "list":     process.exit(await list());
     case "pull":     process.exit(pull());
     case "embedding":     process.exit(await embedding());
+    case "embedding-reclaim": {
+      const info = runtimeBrainInfo();
+      if (!info.exists) { console.error(C.r("This project's brain has never been built.")); process.exit(1); }
+      await reconcileEmbedding(info);
+      process.exit(0);
+    }
     case "embedding-down": process.exit(embeddingDown(rest));
     case "verify":   process.exit(python("tools/verify.py", rest));
     case "sync":     process.exit(sync(rest));
@@ -953,6 +1094,7 @@ const [cmd, ...rest] = process.argv.slice(2);
   list      EVERY brain on this machine (id, ports, running or not)
   logs      tail the log (-f)  pull      re-pull the embedding model
   embedding status of the embedding container (shared machine-wide by default)
+  embedding-reclaim  stop the embedding container when the saved config no longer uses it
   embedding-down  stop the SHARED embedding container (affects every project)  needs --yes
   uninstall remove Docker + brain runtime (KEEPS knowledge)   needs --yes
   reset     DELETE project knowledge + pull a fresh template  needs --yes

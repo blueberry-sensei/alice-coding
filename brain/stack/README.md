@@ -78,10 +78,32 @@ npm run embedding:down:yes    # tắt embedding dùng chung — ẢNH HƯỞNG M
 Container dùng chung **không publish cổng ra host**: brain nói chuyện với nó qua network nội bộ,
 nên không có đường nào từ LAN vào một endpoint không auth.
 
-> **Launcher chỉ đọc `.env`.** Endpoint embedding lưu ở **Settings → Models** ghi đè `.env` cho
-> API lúc chạy, nhưng launcher không thấy nó — nên nếu chỉ đổi trong UI thì Ollama vẫn được dựng.
-> Muốn ALICE thôi hẳn việc dựng/tải model, khai `SAG_EMBEDDING_BASE_URL` trong `.env` của brain.
-> Khi hai nguồn lệch nhau, API ghi rõ ra log lúc khởi động và UI hiện cảnh báo "env đang bị bỏ qua".
+### Tự thu hồi khi không còn ai dùng
+
+Endpoint embedding đổi được **trong app** (Settings → Models, hoặc import cấu hình), nơi launcher
+không nhìn thấy. Nên sau mỗi lần brain sẵn sàng, `npm run brain` hỏi API một câu duy nhất —
+`embedding_uses_bundled_container` trong `/system/capabilities` — rồi tự chỉnh cho khớp:
+
+| API trả lời | ALICE làm |
+|---|---|
+| `false` — đang dùng endpoint khác | Ghi nhớ external, **tắt** container. Ở chế độ shared chỉ tắt sau khi hỏi mọi brain khác và không ai còn dùng |
+| `true` — cần container bundled | Gỡ ghi nhớ đó, lượt `npm run brain` kế tiếp dựng lại |
+| `null` — brain cũ hoặc chạy ngoài stack | **Không đụng vào gì** |
+
+Ba ràng buộc an toàn: chỉ `stop` (không xoá volume, model giữ nguyên); container dùng chung chỉ
+bị tắt khi **không brain nào** còn cần; và ALICE chỉ tự gỡ thứ **chính nó** đặt —
+`ALICE_EMBEDDING_MODE` do người dùng khai bằng tay thì không bao giờ bị đụng.
+
+```bash
+npm run embedding:reclaim   # chạy tay bước đối chiếu này bất cứ lúc nào
+```
+
+API chỉ trả về **một boolean**, không trả URL: launcher không cần biết endpoint thật, và endpoint
+là hạ tầng nội bộ của người dùng nên không đáng phơi ra một route không auth.
+
+> Khai `SAG_EMBEDDING_BASE_URL` thẳng trong `.env` của brain vẫn là đường nhanh nhất: ngay từ lượt
+> đầu đã không dựng và không tải gì. Khi hai nguồn lệch nhau, API ghi rõ ra log lúc khởi động và
+> UI hiện cảnh báo "env đang bị bỏ qua".
 
 ### Secret nằm ở đâu
 

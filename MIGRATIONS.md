@@ -6,6 +6,35 @@ Quy ước version: **semver**. MAJOR đổi = có breaking change bắt buộc 
 
 ---
 
+## 2.4.16 — Embedding tự thu hồi khi không còn ai dùng
+
+**Không breaking.** Chạy `npm run update`, rồi `npm run brain`.
+
+2.4.15 để lại một khe: endpoint embedding đổi được trong app (Settings → Models, hoặc import
+cấu hình), nhưng launcher chỉ đọc `.env` — nên đổi sang API riêng xong, container Ollama vẫn
+chạy và model 1,2 GB vẫn nằm đó, **chạy không công**.
+
+Nay `npm run brain` tự đối chiếu và tự chỉnh, **cả hai chiều**:
+
+| Tình huống | ALICE làm gì |
+|---|---|
+| Cấu hình trong app trỏ embedding ra ngoài | Ghi nhớ là external, **tắt** container; ở chế độ shared chỉ tắt khi **không brain nào khác** còn dùng |
+| Bỏ endpoint riêng trong app | Tự gỡ ghi nhớ đó và dựng lại container ở lượt `npm run brain` kế tiếp |
+
+- Chỉ `stop`, **không** xoá volume: model đã tải được giữ, bật lại là chạy ngay. Muốn lấy lại
+  ~1,2 GB đĩa thì `docker volume rm alice-embedding-models`.
+- ALICE chỉ tự gỡ thứ **chính nó** đặt. `ALICE_EMBEDDING_MODE` do người dùng khai bằng tay
+  không bao giờ bị đụng tới.
+- Chạy tay bất cứ lúc nào: `npm run embedding:reclaim`. Xem trạng thái: `npm run embedding`.
+
+**Sửa kèm — xoá một ô cấu hình nay trả về giá trị `.env`, không ép rỗng.** Trước đây xoá
+`embedding_base_url` (hoặc `embedding_dimensions`) trong UI ghi `null` vào DB, và `null` đó ghi
+đè cả `.env` — không còn đường nào từ UI quay về mặc định của bản triển khai. Nay xoá ô = **gỡ
+override**, field quay về giá trị môi trường ngay lập tức. Giá trị `null` tồn đọng của bản cũ
+được đọc đúng như "không ghi đè", nên bản đang cài tự khỏi, không cần thao tác tay.
+
+---
+
 ## 2.4.15 — Embedding dùng chung cả máy · sync báo hỏng · không còn hỏng câm
 
 **Không breaking về dữ liệu, nhưng đổi hai hành vi mặc định.** Chạy `npm run update` rồi

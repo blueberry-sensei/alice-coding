@@ -68,6 +68,10 @@ services:
       # toàn máy khi launcher bật chế độ shared. KHÔNG ghim cứng: ghim là mọi máy muốn dùng
       # chung một embedding server (TEI, Infinity, Ollama sẵn có) đều phải vá tay compose.
       SAG_EMBEDDING_BASE_URL: ${SAG_EMBEDDING_BASE_URL:-http://embedding:11434/v1}
+      # Hostname của container embedding do stack này dựng. API chỉ dùng nó để trả lời launcher
+      # câu "endpoint đang chạy có phải container của tôi không" — nhờ đó launcher thu hồi được
+      # container không còn ai dùng (đổi endpoint trong app thì launcher không tự biết).
+      SAG_BUNDLED_EMBEDDING_HOSTS: embedding,alice-embedding
       SAG_EMBEDDING_MODEL: ${SAG_EMBEDDING_MODEL:-bge-m3}
       SAG_EMBEDDING_API_KEY: "ollama"
       # LLM KHÔNG cấu hình ở đây. Nơi duy nhất là app: Settings → Models.

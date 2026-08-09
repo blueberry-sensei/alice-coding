@@ -1,6 +1,6 @@
 {
   "name": "alice-coding",
-  "version": "2.4.15",
+  "version": "2.4.16",
   "private": true,
   "description": "Trí nhớ dài hạn + kỷ luật làm việc cho AI coding agent. npm chỉ là lớp vỏ tiện tay — lõi là Python + Docker.",
   "scripts": {
@@ -14,6 +14,7 @@
     "brain:logs": "node tools/cli.js logs",
     "brain:pull": "node tools/cli.js pull",
     "embedding": "node tools/cli.js embedding",
+    "embedding:reclaim": "node tools/cli.js embedding-reclaim",
     "embedding:down": "node tools/cli.js embedding-down",
     "embedding:down:yes": "node tools/cli.js embedding-down --yes",
     "wsl:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File brain/stack/enable-wsl-localhost.ps1",

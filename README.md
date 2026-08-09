@@ -9,7 +9,7 @@
 **Một sản phẩm của [Blueberry Sensei](https://github.com/blueberry-sensei).**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.15-6E56CF)](VERSION)
+[![Version](https://img.shields.io/badge/version-2.4.16-6E56CF)](VERSION)
 [![Engine](https://img.shields.io/badge/engine-ALICE%20CORE-6E56CF)](#alice-core-khác-rag-thường-ở-đâu)
 [![Embedding](https://img.shields.io/badge/embedding-bge--m3%20local-2EA043)](https://huggingface.co/BAAI/bge-m3)
 [![Runtime](https://img.shields.io/badge/runtime-Docker-2496ED?logo=docker&logoColor=white)](#4-cài-đặt-trong-10-phút)
@@ -400,10 +400,12 @@ tách rời để biết lỗi nằm ở đâu.
 `brain:down` · `brain:pull` (kéo lại embedding `bge-m3`).
 
 **Embedding:** `embedding` (chế độ + model đã tải + brain nào đang gắn vào) ·
+`embedding:reclaim` (thu hồi container không còn ai dùng) ·
 `embedding:down:yes` (tắt container embedding **dùng chung cả máy** — ảnh hưởng mọi project).
 Mặc định một container Ollama cho **cả máy**, không phải cho mỗi project; đã có embedding API
 riêng thì khai `SAG_EMBEDDING_BASE_URL` trong `.env` của brain và ALICE **không dựng, không tải**
-gì cả.
+gì cả. Đổi endpoint trong app thì `npm run brain` **tự tắt** container thừa, và tự dựng lại khi
+brain cần nó trở lại.
 
 **Knowledge:** `verify` · `verify:fix` (nắn citation trôi dòng) · `sync` · `sync:rebuild` ·
 `sync:no-verify` · `sync:no-wait` (hai cái cuối chỉ để chẩn đoán, không dùng hằng ngày).

@@ -6,6 +6,59 @@ Quy ước version: **semver**. MAJOR đổi = có breaking change bắt buộc 
 
 ---
 
+## 2.4.15 — Embedding dùng chung cả máy · sync báo hỏng · không còn hỏng câm
+
+**Không breaking về dữ liệu, nhưng đổi hai hành vi mặc định.** Chạy `npm run update` rồi
+`npm run brain`.
+
+### 1. Embedding: không còn một Ollama cho mỗi project
+
+Trước: mỗi project một container Ollama, mỗi container một bản sao `bge-m3` ~1,2 GB. 10 project
+trên một máy = 10 bản của cùng một file. Và ngay cả khi đã có embedding API riêng, ALICE vẫn dựng
+Ollama rồi tải model về cho một container không ai gọi tới.
+
+Nay có ba chế độ:
+
+| Chế độ | Kích hoạt khi | ALICE làm gì |
+|---|---|---|
+| `external` | `.env` của brain có `SAG_EMBEDDING_BASE_URL` | **không dựng container, không tải model** |
+| `shared` (mặc định) | không khai gì | đúng **một** container `alice-embedding` cho cả máy |
+| `project` | `ALICE_EMBEDDING_MODE=project` | một container riêng cho brain này (cách cũ) |
+
+Dữ liệu vẫn cách ly tuyệt đối như cũ (DB, vector index, upload nằm trong named volume riêng theo
+`BRAIN_ID`); chỉ **model** là dùng chung, vì model không có gì để cách ly.
+
+> Launcher chỉ đọc `.env`. Endpoint embedding đặt ở **Settings → Models** có hiệu lực với API
+> nhưng launcher không thấy — muốn ALICE thôi hẳn việc dựng/tải model thì khai
+> `SAG_EMBEDDING_BASE_URL` trong `.env` của brain.
+
+- Ở chế độ `shared`, lần `npm run brain` đầu tiên sau khi nâng cấp tải model vào volume chung một
+  lần nữa (~1,2 GB). Từ project thứ hai trở đi bước này xong ngay. Chế độ `external` không tải gì.
+- Volume `<BRAIN_ID>_ollama` cũ **không bị xoá tự động**. Xoá tay khi đã chắc:
+  `docker volume rm <BRAIN_ID>_ollama` cho từng brain (mỗi cái ~1,2 GB).
+- Muốn giữ nguyên cách cũ: thêm `ALICE_EMBEDDING_MODE=project` vào `.env` của brain.
+- Lệnh mới: `npm run embedding` (chế độ + brain nào đang gắn vào),
+  `npm run embedding:down:yes` (tắt — ảnh hưởng mọi project).
+
+> **Windows:** xoá volume giải phóng chỗ *bên trong* đĩa ảo của Docker, **không** trả lại dung
+> lượng cho ổ C:. File `.vhdx` chỉ phình, không tự co. Cách co thật: xem `brain/stack/README.md`,
+> mục "Windows: dọn rác trong Docker KHÔNG trả lại dung lượng cho ổ C:".
+
+### 2. `npm run sync` chờ và **exit khác 0** khi tài liệu không vào được não
+
+Trước: `ingest` trả về ngay, vector hoá chạy nền, nên embedding hỏng vẫn cho ra "done" và exit 0 —
+tri thức nằm trong DB không có vector, search không bao giờ trả về, và không lệnh nào báo lỗi.
+
+Nay sync chờ Brain xử lý xong (tối đa `BRAIN_SYNC_WAIT`, mặc định 900 giây) rồi mới kết luận:
+
+- có document `failed` → in lý do từng file và **exit 1**;
+- hết thời gian chờ mà còn đang chạy → in cảnh báo, exit 0 (chưa xong khác với đã hỏng);
+- muốn giữ hành vi cũ: `npm run sync:no-wait`.
+
+Script CI hoặc agent nào đang coi "sync chạy xong là xong" nay sẽ thấy lỗi thật. Đó là mục đích.
+
+---
+
 ## 2.4.13 — `npm run brain` không còn phụ thuộc thư mục hiện hành của WSL
 
 **Không breaking.** Chạy `npm run update`, rồi `npm run brain` như bình thường.

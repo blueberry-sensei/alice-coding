@@ -126,6 +126,7 @@ const brainEnv = require(path.join(STACK, "brain-env.js"));
  */
 const WSL_DELEGATED_COMMANDS = new Set([
   "down", "restart", "logs", "status", "list", "pull", "uninstall",
+  "embedding", "embedding-down",
 ]);
 
 function runSelfInWsl(args) {
@@ -241,8 +242,13 @@ function composeEnv() {
     const raw = v || fallback;
     return path.isAbsolute(raw) ? path.normalize(raw) : path.resolve(STACK, raw);
   };
+  // Suy lại mỗi lần chạy từ ALICE_EMBEDDING_MODE, không đọc giá trị đã lưu: hai biến này là
+  // HỆ QUẢ của chế độ, lưu chúng lại là mời gọi một .env cũ mâu thuẫn với compose file đang dùng.
+  const embedding = brainEnv.embeddingMode(map);
   return {
     ...process.env,
+    ...brainEnv.embeddingVars(embedding, map),
+    ALICE_EMBEDDING_MODE: embedding,
     // Chỉ có tác dụng ở chế độ dev; chế độ image thì compose.yaml không dùng tới.
     ALICE_APP_PATH: abs(map.ALICE_APP_PATH, "alice-brain"),
     ALICE_CORE_PATH: abs(map.ALICE_CORE_PATH, "alice-core"),
@@ -258,6 +264,7 @@ function composeEnv() {
     _BRAIN_ID: info.BRAIN_ID,
     _ENV_FILE: info.BRAIN_ENV_FILE,
     _MODE: info.BRAIN_MODE,
+    _EMBEDDING: embedding,
   };
 }
 
@@ -275,9 +282,145 @@ function compose(args) {
   // Bộ `-f` phải khớp với lúc `up`, nếu không compose nhìn ra một stack khác và
   // `down` sẽ không tắt đúng cái vừa dựng.
   return run(d.cmd,
-    [...d.pre, "compose", "-p", env._BRAIN_ID, ...brainEnv.composeFiles(env._MODE),
+    [...d.pre, "compose", "-p", env._BRAIN_ID, ...brainEnv.composeFiles(env._MODE, env._EMBEDDING),
      "--env-file", env._ENV_FILE, ...args],
     { cwd: STACK, env });
+}
+
+/** Model embedding của brain này (đọc .env thật; mặc định bge-m3). */
+function embeddingModel() {
+  const info = brainEnv.peek();
+  if (!info.exists) return "bge-m3";
+  try {
+    for (const line of fs.readFileSync(info.BRAIN_ENV_FILE, "utf8").split(/\r?\n/)) {
+      const m = /^\s*SAG_EMBEDDING_MODEL\s*=\s*(.+?)\s*$/.exec(line);
+      if (m) return m[1];
+    }
+  } catch { /* .env không đọc được thì dùng mặc định */ }
+  return "bge-m3";
+}
+
+/** Chế độ embedding của brain này: "external" | "shared" (mặc định) | "project". */
+function embeddingModeHere() {
+  const env = composeEnv();
+  return env ? env._EMBEDDING : "shared";
+}
+
+/** Endpoint embedding người dùng tự khai trong .env của brain (chế độ external). */
+function externalEmbeddingUrl() {
+  const info = brainEnv.peek();
+  if (!info.exists) return "";
+  try {
+    for (const line of fs.readFileSync(info.BRAIN_ENV_FILE, "utf8").split(/\r?\n/)) {
+      const m = /^\s*SAG_EMBEDDING_BASE_URL\s*=\s*(.+?)\s*$/.exec(line);
+      if (m) return m[1];
+    }
+  } catch { /* .env không đọc được thì thôi */ }
+  return "";
+}
+
+/** `docker compose` trên stack embedding dùng chung toàn máy. */
+function hub(args) {
+  const d = findDocker();
+  if (!d) { console.error(C.r("Docker not found.") + " Run `npm run doctor`."); return 1; }
+  return run(d.cmd, [...d.pre, ...brainEnv.hubComposeArgs(), ...args], { cwd: STACK });
+}
+
+/** Tải model về đúng nơi đang phục vụ brain này. */
+function pull() {
+  const model = embeddingModel();
+  const mode = embeddingModeHere();
+  if (mode === "external") {
+    console.log(C.y("Nothing to pull: this brain uses your own embedding endpoint."));
+    console.log(C.d("  ALICE does not run or download any model in this mode - that is the point."));
+    console.log(C.d("  Endpoint: " + (externalEmbeddingUrl() || "SAG_EMBEDDING_BASE_URL in the brain .env")));
+    return 0;
+  }
+  if (mode === "shared") {
+    console.log(C.d(`Pulling ${model} into the shared embedding container (once per machine)...`));
+    return hub(["exec", "-T", "embedding", "ollama", "pull", model]);
+  }
+  console.log(C.d(`Pulling ${model} into this project's embedding container...`));
+  return compose(["exec", "-T", "embedding", "ollama", "pull", model]);
+}
+
+/**
+ * Trạng thái embedding dùng chung + brain nào đang gắn vào nó.
+ *
+ * Cần một lệnh riêng vì stack này KHÔNG thuộc brain nào: `brain:status` của một project không
+ * nói được gì về một container mà mọi project cùng dùng.
+ */
+async function embedding() {
+  const d = findDocker();
+  const mode = embeddingModeHere();
+  console.log(C.b("Embedding for this project:"));
+  const label = {
+    external: C.g("external") + C.d(" - your own endpoint; ALICE runs and downloads nothing"),
+    shared: C.g("shared") + C.d(" - one Ollama container for the whole machine"),
+    project: C.y("project") + C.d(" - a private Ollama container for this brain"),
+  };
+  console.log(`  mode: ${label[mode] || label.shared}`);
+  if (mode === "external") {
+    console.log(`  endpoint: ${externalEmbeddingUrl() || C.y("SAG_EMBEDDING_BASE_URL (unreadable)")}`);
+    console.log(C.d("\n  No Ollama container is started and no model is downloaded in this mode."));
+    console.log(C.d("  Want ALICE to run one instead? Remove SAG_EMBEDDING_BASE_URL from"));
+    console.log(C.d(`    ${brainEnv.peek().BRAIN_ENV_FILE}`));
+    console.log(C.d("  then: npm run brain"));
+    console.log(C.y("\n  Note: an embedding endpoint saved in Settings -> Models overrides the .env value"));
+    console.log(C.y("  for the API, but the launcher only reads .env. Keep the two in agreement."));
+    return 0;
+  }
+  if (mode !== "shared") {
+    console.log(C.d("\n  Switch to the shared container (frees ~1.2 GB per extra project):"));
+    console.log(C.d(`    remove ALICE_EMBEDDING_MODE=project from ${brainEnv.peek().BRAIN_ENV_FILE}`));
+    console.log(C.d("    then: npm run brain"));
+    return 0;
+  }
+  if (!d) { console.log(C.r("\n  Docker not found.")); return 1; }
+  console.log(C.b("\nShared container:"));
+  const ps = tryRun(d.cmd, [...d.pre, "ps", "-a", "--filter",
+    `label=com.docker.compose.project=${brainEnv.EMBEDDING_HUB_PROJECT}`,
+    "--format", "  {{.Names}}\t{{.Status}}"]).out;
+  if (!ps.trim()) {
+    console.log(C.y("  not built yet") + C.d(" - it comes up with `npm run brain`"));
+    return 0;
+  }
+  console.log(ps);
+  // `docker exec` KHÔNG có cờ `-T` (đó là cờ của `docker compose exec`) — thêm vào là exec
+  // hỏng và cột model luôn rỗng.
+  const models = tryRun(d.cmd, [...d.pre, "exec", brainEnv.EMBEDDING_HUB_CONTAINER,
+    "ollama", "list"]);
+  console.log(C.b("\nModels (shared by every project on this machine):"));
+  console.log(models.ok ? models.out.split(/\r?\n/).map((l) => "  " + l).join("\n")
+                        : C.y("  could not read the model list (container still starting?)"));
+  console.log(C.b("\nBrains attached:"));
+  const attached = tryRun(d.cmd, [...d.pre, "network", "inspect", brainEnv.EMBEDDING_HUB_PROJECT,
+    "--format", "{{range .Containers}}{{println .Name}}{{end}}"]).out
+    .split(/\r?\n/)
+    .map((name) => name.trim())
+    // Bỏ chính container embedding: nó luôn ở đó, liệt kê nó ra chỉ làm nhiễu câu hỏi thật
+    // ("còn brain nào đang dùng cái này không, tắt có ai chết không").
+    .filter((name) => name && name !== brainEnv.EMBEDDING_HUB_CONTAINER);
+  console.log(attached.length ? attached.map((name) => "  " + name).join("\n")
+                              : C.d("  (no brain is running right now)"));
+  return 0;
+}
+
+/** Tắt embedding dùng chung — ảnh hưởng MỌI project trên máy, nên phải nói rõ. */
+function embeddingDown(argv) {
+  const yes = argv.includes("--yes") || argv.includes("-y");
+  console.log(C.y("This stops the embedding container shared by EVERY project on this machine."));
+  console.log(C.d("Any brain that is still running loses its ability to create vectors:"));
+  console.log(C.d("ingest and search will fail (loudly) until it is back."));
+  if (!yes) {
+    console.log("If you are sure, run: " + C.b("npm run embedding:down:yes"));
+    return 2;
+  }
+  // Chỉ `down`, KHÔNG `--volumes`: xoá volume là xoá model đã tải cho cả máy, lần bật lại phải
+  // kéo về từ đầu. Xoá model là một quyết định riêng, không phải hệ quả phụ của việc tắt.
+  const rc = hub(["down"]);
+  if (rc === 0) console.log(C.g("Shared embedding stopped. Downloaded models were kept."));
+  return rc;
 }
 
 /**
@@ -332,6 +475,10 @@ function uninstall(argv) {
       + (outside ? C.y("  [OUTSIDE the project directory - WILL BE SKIPPED]") : ""));
   }
   console.log(C.g("\nKept: ") + "wiki/ | mistakes/ | decisions/ | context/ | changelog/ | ALICE.project.md");
+  if (embeddingModeHere() === "shared") {
+    console.log(C.g("Kept: ") + "the machine-wide embedding container and its downloaded models"
+      + C.d(" - other projects use it (npm run embedding:down:yes to stop it)"));
+  }
 
   if (!keepCache) {
     console.log(C.d("\nDocker does not label build cache per project, so it cannot filter out just this"));
@@ -352,7 +499,7 @@ function uninstall(argv) {
   } else {
     const env = composeEnv();
     const viaCompose = env && run(d.cmd,
-      [...d.pre, "compose", "-p", env._BRAIN_ID, ...brainEnv.composeFiles(env._MODE),
+      [...d.pre, "compose", "-p", env._BRAIN_ID, ...brainEnv.composeFiles(env._MODE, env._EMBEDDING),
        "--env-file", env._ENV_FILE, "down",
        "--volumes", "--remove-orphans", "--rmi", "local"], { cwd: STACK, env }) === 0;
     if (!viaCompose) {
@@ -607,6 +754,10 @@ async function status() {
   console.log(C.b("Brain for this project:"));
   console.log(`  ${info.BRAIN_ID}` + (info.exists ? "" : C.y("  [never built]")));
   console.log(C.d(`  mode: ${info.BRAIN_MODE === "dev" ? "dev - built from local sources" : "published image"}`));
+  console.log(C.d(`  embedding: ${{
+    external: "external - your own endpoint; ALICE runs and downloads nothing",
+    project: "project - a private Ollama container for this brain",
+  }[info.ALICE_EMBEDDING_MODE] || "shared - one Ollama container for the whole machine (npm run embedding)"}`));
   console.log(C.b("\nContainer:"));
   if (!info.exists) {
     console.log(C.d("  (not built)"));
@@ -784,7 +935,9 @@ const [cmd, ...rest] = process.argv.slice(2);
     case "reset":    process.exit(reset(rest));
     case "status":   process.exit(await status());
     case "list":     process.exit(await list());
-    case "pull":     process.exit(compose(["exec", "-T", "embedding", "ollama", "pull", "bge-m3"]));
+    case "pull":     process.exit(pull());
+    case "embedding":     process.exit(await embedding());
+    case "embedding-down": process.exit(embeddingDown(rest));
     case "verify":   process.exit(python("tools/verify.py", rest));
     case "sync":     process.exit(sync(rest));
     case "update":   process.exit(python("tools/update.py", rest));
@@ -799,6 +952,8 @@ const [cmd, ...rest] = process.argv.slice(2);
   status    status of this project's brain
   list      EVERY brain on this machine (id, ports, running or not)
   logs      tail the log (-f)  pull      re-pull the embedding model
+  embedding status of the embedding container (shared machine-wide by default)
+  embedding-down  stop the SHARED embedding container (affects every project)  needs --yes
   uninstall remove Docker + brain runtime (KEEPS knowledge)   needs --yes
   reset     DELETE project knowledge + pull a fresh template  needs --yes
   verify    check the knowledge base   sync    push files into the brain

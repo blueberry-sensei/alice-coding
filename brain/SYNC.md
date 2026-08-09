@@ -38,6 +38,7 @@ Sync khi kho tri thức đang hỏng còn tệ hơn không sync: nó nhồi tran
 npm run sync                 # đồng bộ incremental (chỉ file đổi)
 npm run sync:rebuild         # xoá sạch source + ingest lại toàn bộ
 npm run sync:no-verify       # bỏ gate — chỉ khi gỡ lỗi
+npm run sync:no-wait         # không chờ vector hoá — sẽ KHÔNG phát hiện được document hỏng
 npm.cmd run sync -- --config path/brain.config   # cờ có giá trị: xem ghi chú dưới
 ```
 
@@ -57,6 +58,34 @@ Máy không có Python → chạy trong container: `docker compose exec api pyth
 | Mất `.sag-data` / đổi embedding model / state sai schema | `--rebuild` |
 
 > **Ghi file là rẻ, sync là đắt.** Mỗi lần sync một file đã đổi = xoá document + ingest lại + SAG chạy LLM extract nền. Ghi từng turn nhưng sync gộp cuối task là nhịp đúng.
+
+## Exit code — sync KHÔNG được im lặng khi tri thức không vào được não
+
+`POST .../documents/ingest` chỉ **đăng ký** document; chunk hoá, vector hoá và trích xuất chạy
+nền. Nếu chỉ nhìn lượt ingest thì embedding hỏng vẫn cho ra "done" và exit 0 — trong khi text nằm
+trong DB **không có vector**, search không bao giờ trả nó về, và không ai biết. Đó là kiểu hỏng
+tệ nhất: người dùng tin là mình đã ghi được.
+
+Vì vậy sau khi ingest, sync **chờ** rồi mới kết luận:
+
+| Kết quả | In ra | Exit |
+|---|---|---|
+| Mọi document `ready` | `done: every document is READY and searchable.` | `0` |
+| Có document `failed` | lý do từng file + cách kiểm tra | **`1`** |
+| Hết thời gian chờ mà còn đang xử lý | cảnh báo còn N document | `0` |
+
+Thời gian chờ tối đa: `BRAIN_SYNC_WAIT` (giây, mặc định `900`). Bỏ hẳn bước chờ:
+`npm run sync:no-wait` — khi đó sync không còn khả năng phát hiện document hỏng.
+
+Hai nhóm nguyên nhân khi `failed`, phân biệt bằng chính dòng lỗi in ra:
+
+| Lỗi nói về | Nghĩa là | Kiểm theo thứ tự |
+|---|---|---|
+| embedding / vector / index | chunk không có vector → search vector không thấy | `npm run embedding` → `npm run brain:logs` |
+| extraction / LLM / provider | chưa cấu hình LLM hoặc provider lỗi → không có event/entity | Settings → Models |
+
+> **Chưa cấu hình LLM thì mọi document sẽ `failed` và sync exit 1.** Đó là có chủ đích: một não
+> chỉ có chunk mà không có event/entity là não chưa dùng được, và bản cũ im lặng về chuyện đó.
 
 ## Lưu ý
 - Sau ingest, SAG chạy **extract nền** (LOADING → EXTRACTING → READY). Chỉ document **READY** mới search tốt.

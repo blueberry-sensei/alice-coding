@@ -9,7 +9,11 @@ trong brain/.sync-state.json, rồi create/update/delete theo diff.
 TRƯỚC KHI SYNC, script chạy tools/verify.py và DỪNG nếu kho tri thức có ERROR — xem
 run_verify(). Đây là forcing function portable của hệ thống (không cần hook riêng agent).
 
-Chỉ dùng thư viện chuẩn. Chạy: python brain/sync/sync.py [--rebuild] [--no-verify]
+SAU KHI SYNC, script CHỜ Brain xử lý xong rồi mới kết luận — xem await_documents(). Document
+nào FAILED thì sync **exit 1**. Ingest trả về ngay, còn vector hoá chạy nền, nên nếu chỉ nhìn
+lượt ingest thì embedding hỏng vẫn cho ra "done" và exit 0 trong khi não không có vector nào.
+
+Chỉ dùng thư viện chuẩn. Chạy: python brain/sync/sync.py [--rebuild] [--no-verify] [--no-wait]
 """
 import argparse
 import hashlib
@@ -112,7 +116,16 @@ DEFAULTS = {
     "BRAIN_EXCLUDE": "_TEMPLATE.md",
     "STATE_FILE": str(BRAIN_DIR / ".sync-state.json"),
     "BRAIN_SYNC_TIMEOUT": os.environ.get("BRAIN_SYNC_TIMEOUT", "180"),
+    # Chờ tối đa bấy nhiêu giây cho extraction/vector hoá xong trước khi kết luận. Ingest trả về
+    # ngay, việc thật chạy nền — không chờ thì sync không bao giờ biết tri thức có vào được não
+    # hay không, và đó chính là chỗ "exit 0 nhưng não rỗng".
+    "BRAIN_SYNC_WAIT": os.environ.get("BRAIN_SYNC_WAIT", "900"),
 }
+
+#: Trạng thái document phía Brain (khớp `DocumentStatus` của alice-brain).
+TERMINAL_OK = "ready"
+TERMINAL_FAILED = "failed"
+IN_PROGRESS = ("pending", "loading", "extracting")
 
 
 def load_config(path):
@@ -327,6 +340,57 @@ def report_knowledge_sync(
         )
 
 
+def fetch_documents(cfg, token, source_id):
+    """Map document_id -> document, đọc từ Brain."""
+    docs = as_items(http("GET", "%s/sources/%s/documents" % (cfg["SAG_API_BASE"], source_id),
+                         token=token))
+    return {d.get("id"): d for d in docs if d.get("id")}
+
+
+def await_documents(cfg, token, source_id, doc_ids, wait_seconds):
+    """Chờ Brain xử lý xong các document vừa gửi rồi trả về (failed, pending).
+
+    Vì sao phải chờ: `POST /documents/ingest` trả về ngay khi document được ĐĂNG KÝ; chunk hoá,
+    vector hoá và trích xuất chạy nền. Sync in "done" rồi thoát 0 ở đúng thời điểm chưa có gì
+    được kiểm chứng — embedding hỏng thì tri thức nằm trong DB mà không có vector, search không
+    bao giờ trả nó về, và không một lệnh nào trong chuỗi báo lỗi. Hỏng câm là kiểu hỏng tệ nhất:
+    người dùng tin là mình đã ghi được.
+    """
+    if not doc_ids or wait_seconds <= 0:
+        return [], list(doc_ids)
+
+    import time
+
+    wanted = set(doc_ids)
+    deadline = time.time() + wait_seconds
+    failed, pending, announced = [], list(wanted), False
+    while True:
+        by_id = fetch_documents(cfg, token, source_id)
+        failed, pending = [], []
+        for doc_id in wanted:
+            doc = by_id.get(doc_id)
+            if doc is None:
+                # Document biến mất khỏi Brain sau khi ingest là mất dữ liệu, không phải "đang chạy".
+                failed.append({"id": doc_id, "title": "?", "error": "document is gone from the brain"})
+                continue
+            status = str(doc.get("status") or "").lower()
+            if status == TERMINAL_FAILED:
+                failed.append({
+                    "id": doc_id,
+                    "title": doc.get("title") or doc.get("filename") or doc_id,
+                    "error": doc.get("error") or "no reason reported",
+                })
+            elif status in IN_PROGRESS:
+                pending.append(doc_id)
+        if not pending or time.time() >= deadline:
+            return failed, pending
+        if not announced:
+            print("[brain-sync] waiting for the brain to vectorise %d document(s) (up to %ds)..."
+                  % (len(pending), wait_seconds))
+            announced = True
+        time.sleep(3)
+
+
 def main():
     ap = argparse.ArgumentParser(description="Brain sync (SAG)")
     ap.add_argument("--config", default=str(BRAIN_DIR / "brain.config"))
@@ -334,6 +398,8 @@ def main():
                     help="Xoá sạch source rồi ingest lại toàn bộ từ file")
     ap.add_argument("--no-verify", action="store_true",
                     help="Bỏ qua gate tools/verify.py (KHÔNG khuyến khích)")
+    ap.add_argument("--no-wait", action="store_true",
+                    help="Không chờ Brain vector hoá xong; sync sẽ KHÔNG phát hiện được document hỏng")
     args = ap.parse_args()
 
     run_verify(args.no_verify)
@@ -355,6 +421,11 @@ def main():
             delete_doc(cfg, token, source_id, d.get("id"))
         state["files"] = {}
 
+    # Trạng thái hiện tại của document trong não. Không đọc cái này thì mọi lượt sync sau chỉ
+    # nhìn sha256 và bỏ qua đúng những file đã hỏng ở lượt trước — file hỏng vĩnh viễn không
+    # được thử lại, mà sync vẫn báo "done".
+    existing = fetch_documents(cfg, token, source_id)
+
     seen, created, updated, deleted, skipped = set(), [], [], [], 0
     for p in files:
         r = rel(p)
@@ -364,9 +435,17 @@ def main():
         # Only skip if the document actually exists in the brain. Skipping when
         # state says "done" but the document was deleted by a previous crashed run
         # is the root cause of silent data loss — the agent trusts missing memory.
+        #
+        # Và chỉ skip khi document đó KHÔNG hỏng: file không đổi nhưng document đang `failed`
+        # thì phải nạp lại, không phải bỏ qua.
         if entry and entry.get("sha256") == h and entry.get("document_id") and not args.rebuild:
-            skipped += 1
-            continue
+            current = existing.get(entry["document_id"])
+            healthy = current is not None and str(current.get("status") or "").lower() != TERMINAL_FAILED
+            if healthy:
+                skipped += 1
+                continue
+            print("  ! re-ingesting %s (the brain has it as %s)"
+                  % (r, "failed" if current else "missing"))
         # Ingest the new document FIRST — never leave a gap.
         doc_id = ingest(cfg, token, source_id, r, p.read_text(encoding="utf-8"))
         old_doc_id = entry.get("document_id") if entry else None
@@ -401,15 +480,51 @@ def main():
         skipped=skipped,
         rebuild=args.rebuild,
     )
-    print("[brain-sync] done: +%d ~%d -%d (skipped %d). source=%s (%s)"
+    print("[brain-sync] ingested: +%d ~%d -%d (skipped %d). source=%s (%s)"
           % (len(created), len(updated), len(deleted), skipped, cfg["BRAIN_SOURCE_NAME"], source_id))
-    print("[brain-sync] event/entity extraction runs in the background; wait for READY before searching.")
+
+    if args.no_wait:
+        print("[brain-sync] --no-wait: NOT checking whether the brain vectorised anything.")
+        print("[brain-sync] event/entity extraction runs in the background; wait for READY before searching.")
+        return 0
+
+    try:
+        wait_seconds = int(cfg["BRAIN_SYNC_WAIT"])
+    except (TypeError, ValueError):
+        wait_seconds = 900
+    # Kiểm TOÀN BỘ file đang được theo dõi, không chỉ file vừa gửi lượt này. Chỉ nhìn lượt này
+    # thì một lượt sync không đổi file nào sẽ báo "done" trong khi não vẫn giữ document hỏng
+    # từ lượt trước — đúng kiểu im lặng đang phải xoá bỏ.
+    tracked = [e.get("document_id") for e in state["files"].values() if e.get("document_id")]
+    failed, pending = await_documents(cfg, token, source_id, tracked, wait_seconds)
+
+    for item in failed:
+        print("  ! FAILED %s: %s" % (item["title"], item["error"]))
+    if pending:
+        print("[brain-sync] still processing after %ds: %d document(s). Check: npm run brain:logs"
+              % (wait_seconds, len(pending)))
+
+    if failed:
+        # Exit khác 0. Đây là điểm mấu chốt: một lượt sync "thành công" trong khi document không
+        # tới được trạng thái READY là tri thức đã mất mà không ai biết. CI, script và agent đều
+        # đọc exit code — trả 0 ở đây là nói dối cả chuỗi phía sau.
+        print("\n[brain-sync] FAILED: %d of %d document(s) did not reach READY."
+              % (len(failed), len(tracked)))
+        print("[brain-sync] They are NOT fully searchable. The reason for each file is printed above.")
+        print("[brain-sync] Embedding errors  -> npm run embedding, then npm run brain:logs")
+        print("[brain-sync] Extraction errors -> Settings -> Models (an LLM must be configured)")
+        print("[brain-sync] Fix the cause, then run npm run sync again.")
+        return 1
+
+    if not pending:
+        print("[brain-sync] done: every document is READY and searchable.")
+    return 0
 
 
 if __name__ == "__main__":
     _install_file_log()
     try:
-        main()
+        sys.exit(main() or 0)
     except SystemExit:
         raise
     except BaseException:

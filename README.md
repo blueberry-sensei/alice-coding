@@ -9,7 +9,7 @@
 **Một sản phẩm của [Blueberry Sensei](https://github.com/blueberry-sensei).**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.14-6E56CF)](VERSION)
+[![Version](https://img.shields.io/badge/version-2.4.15-6E56CF)](VERSION)
 [![Engine](https://img.shields.io/badge/engine-ALICE%20CORE-6E56CF)](#alice-core-khác-rag-thường-ở-đâu)
 [![Embedding](https://img.shields.io/badge/embedding-bge--m3%20local-2EA043)](https://huggingface.co/BAAI/bge-m3)
 [![Runtime](https://img.shields.io/badge/runtime-Docker-2496ED?logo=docker&logoColor=white)](#4-cài-đặt-trong-10-phút)
@@ -399,8 +399,14 @@ tách rời để biết lỗi nằm ở đâu.
 **Brain:** `doctor` · `brain` · `brain:status` · `brain:list` · `brain:logs` · `brain:restart` ·
 `brain:down` · `brain:pull` (kéo lại embedding `bge-m3`).
 
+**Embedding:** `embedding` (chế độ + model đã tải + brain nào đang gắn vào) ·
+`embedding:down:yes` (tắt container embedding **dùng chung cả máy** — ảnh hưởng mọi project).
+Mặc định một container Ollama cho **cả máy**, không phải cho mỗi project; đã có embedding API
+riêng thì khai `SAG_EMBEDDING_BASE_URL` trong `.env` của brain và ALICE **không dựng, không tải**
+gì cả.
+
 **Knowledge:** `verify` · `verify:fix` (nắn citation trôi dòng) · `sync` · `sync:rebuild` ·
-`sync:no-verify` (chỉ để chẩn đoán, không dùng hằng ngày).
+`sync:no-verify` · `sync:no-wait` (hai cái cuối chỉ để chẩn đoán, không dùng hằng ngày).
 
 **Nâng cấp và entry point:** `update:check` · `update:dry` · `update` · `mcp` (in config MCP,
 INITIALIZATION thường tự chạy) · `wire` (sinh `ALICE.md`, `CLAUDE.md`/`AGENTS.md`/`GEMINI.md` và
@@ -425,6 +431,8 @@ skill `/alice` từ `prompts.md`).
 | Sync bị chặn | `npm run verify`, sửa lỗi thật rồi sync lại |
 | Search rỗng sau khi đổi embedding | `npm run sync:rebuild` |
 | Model embedding chưa tải xong | `npm run brain:pull` |
+| Đã có embedding API riêng mà ALICE vẫn dựng Ollama | khai `SAG_EMBEDDING_BASE_URL` trong `.env` của brain → `npm run brain` |
+| Sửa `.env` mà không thấy đổi gì | giá trị lưu trong DB đang thắng — xem cảnh báo ở **Settings → Models** |
 | `/alice` không có trong agent | `npm run wire` rồi restart agent |
 
 Log chi tiết nằm trong `brain/.logs/`. Xem thêm [`brain/stack/README.md`](brain/stack/README.md).

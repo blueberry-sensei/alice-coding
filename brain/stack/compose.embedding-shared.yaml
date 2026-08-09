@@ -1,0 +1,24 @@
+# Overlay: brain của project này dùng embedding DÙNG CHUNG toàn máy (`embedding-hub.yaml`)
+# thay vì container Ollama riêng.
+#
+# Launcher chồng file này lên `compose.yaml` khi ALICE_EMBEDDING_MODE=shared, đồng thời đặt
+# ALICE_EMBEDDING_REPLICAS=0 (service `embedding` của project không chạy) và
+# SAG_EMBEDDING_BASE_URL=http://alice-embedding:11434/v1.
+#
+# Chỉ MODEL được dùng chung. Dữ liệu vẫn cách ly tuyệt đối như cũ: DB, vector index, upload và
+# log đều nằm trong named volume mang tiền tố BRAIN_ID của riêng project.
+
+services:
+  api:
+    networks:
+      # `default` phải khai lại: khai `networks` là ghi đè, thiếu nó thì api rời network của
+      # chính stack mình và không còn nói chuyện được với `web`.
+      - default
+      - alice-embedding
+
+networks:
+  alice-embedding:
+    # Do `embedding-hub.yaml` tạo. `external` nghĩa là compose chỉ gắn vào, không tạo và không
+    # xoá — nên `npm run brain:down` của project này không giật network của project khác.
+    external: true
+    name: alice-embedding

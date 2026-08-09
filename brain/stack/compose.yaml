@@ -20,8 +20,14 @@
 
 services:
   # ── Embedding bge-m3 (local, bundled; OpenAI-compatible qua Ollama) ──
+  #
+  # ALICE_EMBEDDING_REPLICAS=0 thì service này KHÔNG chạy. Đó là chế độ embedding dùng chung
+  # toàn máy: một container Ollama duy nhất phục vụ mọi project, thay vì mỗi brain một bản sao
+  # của cùng một model 1,2 GB. Launcher đặt biến này; xem `compose.embedding-shared.yaml`.
   embedding:
     image: ollama/ollama:latest
+    deploy:
+      replicas: ${ALICE_EMBEDDING_REPLICAS:-1}
     volumes:
       - ollama:/root/.ollama
     init: true
@@ -58,8 +64,10 @@ services:
       SAG_LOG_DIR: /data/logs
       SAG_SAG_VECTOR_PROVIDER: lancedb
       SAG_SAG_LANGUAGE: ${SAG_SAG_LANGUAGE:-en}   # prompt trích xuất: 'en' | 'vi'
-      # Embedding -> container bundled (không cần đụng tới)
-      SAG_EMBEDDING_BASE_URL: http://embedding:11434/v1
+      # Embedding -> container bundled của project này (mặc định), hoặc container dùng chung
+      # toàn máy khi launcher bật chế độ shared. KHÔNG ghim cứng: ghim là mọi máy muốn dùng
+      # chung một embedding server (TEI, Infinity, Ollama sẵn có) đều phải vá tay compose.
+      SAG_EMBEDDING_BASE_URL: ${SAG_EMBEDDING_BASE_URL:-http://embedding:11434/v1}
       SAG_EMBEDDING_MODEL: ${SAG_EMBEDDING_MODEL:-bge-m3}
       SAG_EMBEDDING_API_KEY: "ollama"
       # LLM KHÔNG cấu hình ở đây. Nơi duy nhất là app: Settings → Models.
@@ -84,6 +92,9 @@ services:
     depends_on:
       embedding:
         condition: service_healthy
+        # replicas=0 (embedding dùng chung) thì service `embedding` không tồn tại trong stack này.
+        # Thiếu `required: false`, compose từ chối dựng api vì phụ thuộc một service không có.
+        required: false
     healthcheck:
       test:
         - CMD-SHELL

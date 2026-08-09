@@ -68,7 +68,37 @@ fi
 # không bao giờ lệch nhau. File .env của brain nằm NGOÀI repo — xem BRAIN_ENV_FILE.
 eval "$(node "$STACK/brain-env.js" --shell)"
 
+# Model nào phải tải về: đọc từ .env thật của brain, không ghim cứng. Ghim cứng "bge-m3" thì
+# người đổi SAG_EMBEDDING_MODEL sẽ có một API trỏ tới model chưa bao giờ được pull.
+EMBEDDING_MODEL="$(sed -n 's/^[[:space:]]*SAG_EMBEDDING_MODEL[[:space:]]*=[[:space:]]*//p' "$BRAIN_ENV_FILE" 2>/dev/null | tail -1)"
+[ -n "$EMBEDDING_MODEL" ] || EMBEDDING_MODEL=bge-m3
+
 COMPOSE_FILES=(-f "$STACK/compose.yaml")
+
+# Embedding dùng chung toàn máy: một container Ollama phục vụ mọi project thay vì N bản sao của
+# cùng một model. Phải dựng TRƯỚC brain, vì compose.embedding-shared.yaml gắn api vào network
+# `alice-embedding` bằng `external: true` — network chưa tồn tại thì `up` hỏng ngay.
+hub() { docker compose -p alice-embedding -f "$STACK/embedding-hub.yaml" "$@"; }
+
+case "${ALICE_EMBEDDING_MODE:-shared}" in
+  external)
+    # Người dùng đã có embedding API của riêng họ. Không dựng Ollama, không pull model:
+    # 1,2 GB tải về cho một container không ai gọi tới là ngốn tài nguyên đổi lấy số không.
+    echo "Embedding    = external (${SAG_EMBEDDING_BASE_URL:-set in the brain .env}) - nothing is started or downloaded"
+    ;;
+  shared)
+    COMPOSE_FILES+=(-f "$STACK/compose.embedding-shared.yaml")
+    echo "Embedding    = shared (one Ollama container for this whole machine)"
+    hub up -d || {
+      echo "!! Could not start the shared embedding container."
+      echo "   Fall back to one per project: put ALICE_EMBEDDING_MODE=project in $BRAIN_ENV_FILE"
+      exit 1
+    }
+    ;;
+  *)
+    echo "Embedding    = project (a private Ollama container for this brain)"
+    ;;
+esac
 
 if [ "$BRAIN_MODE" = "dev" ]; then
   # Kiểm tra thật, không tin lời khai trong .env: sai đường dẫn mà vẫn chạy tiếp thì lỗi
@@ -142,9 +172,22 @@ else
   dc up -d
 fi
 
-echo "Pulling the bge-m3 embedding model (a few minutes the first time)..."
-dc exec -T embedding ollama pull bge-m3 \
-  || echo "!! Model pull failed. Run it manually: npm run brain:pull"
+case "${ALICE_EMBEDDING_MODE:-shared}" in
+  external)
+    echo "Skipping the model download: this brain uses your own embedding endpoint."
+    ;;
+  shared)
+    echo "Pulling the ${EMBEDDING_MODEL} embedding model (a few minutes the first time)..."
+    # Model chỉ tải MỘT lần cho cả máy; project thứ hai trở đi bước này xong ngay.
+    hub exec -T embedding ollama pull "$EMBEDDING_MODEL" \
+      || echo "!! Model pull failed. Run it manually: npm run brain:pull"
+    ;;
+  *)
+    echo "Pulling the ${EMBEDDING_MODEL} embedding model (a few minutes the first time)..."
+    dc exec -T embedding ollama pull "$EMBEDDING_MODEL" \
+      || echo "!! Model pull failed. Run it manually: npm run brain:pull"
+    ;;
+esac
 
 echo ""
 echo "==> ALICE app: http://${BRAIN_HOST}:${WEB_PORT}"

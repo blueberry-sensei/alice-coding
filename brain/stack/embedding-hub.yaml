@@ -1,0 +1,52 @@
+# ALICE CODING — embedding DÙNG CHUNG cho cả máy (một container, mọi project).
+#
+# Vì sao tách khỏi brain stack: cô lập theo project là đúng cho DỮ LIỆU (mỗi brain một DB, một
+# named volume, không nhìn thấy nhau), nhưng MODEL thì không có gì để cô lập. 10 project trên
+# một máy = 10 container Ollama + 10 bản sao của cùng một file bge-m3 ~1,2 GB. Mặc định đó chống
+# lại đúng người dùng nhiều project.
+#
+# Stack này chạy như một compose project RIÊNG (`-p alice-embedding`), không thuộc brain nào,
+# nên `npm run brain:down` / `npm run uninstall` của một project KHÔNG tắt nó và không xoá model
+# của các project khác.
+#
+# Launcher tự dựng khi ALICE_EMBEDDING_MODE=shared (mặc định). Thủ công:
+#   docker compose -p alice-embedding -f embedding-hub.yaml up -d
+#
+# Trong stack này KHÔNG publish cổng ra host: brain nói chuyện với nó qua network nội bộ
+# `alice-embedding`. Không mở cổng = không có đường nào từ LAN vào một endpoint không auth.
+
+services:
+  embedding:
+    image: ollama/ollama:latest
+    container_name: alice-embedding
+    volumes:
+      # Named volume của CHÍNH stack này (không mang tiền tố brain nào) — đây là chỗ model
+      # được tải về đúng một lần cho cả máy.
+      - models:/root/.ollama
+    init: true
+    logging:
+      driver: json-file
+      options:
+        max-size: ${ALICE_DOCKER_LOG_MAX_SIZE:-10m}
+        max-file: ${ALICE_DOCKER_LOG_MAX_FILES:-3}
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      alice-embedding:
+        aliases:
+          - alice-embedding
+
+networks:
+  # `name:` cố định để brain của project khác gắn vào bằng `external: true`. Không có dòng này
+  # thì Docker đặt tên `alice-embedding_alice-embedding` và không bên nào tìm ra nhau.
+  alice-embedding:
+    name: alice-embedding
+
+volumes:
+  models:
+    name: alice-embedding-models

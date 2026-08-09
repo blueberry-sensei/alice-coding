@@ -36,7 +36,41 @@ $envLines = & node (Join-Path $Stack "brain-env.js") --powershell
 if ($LASTEXITCODE -ne 0) { Write-Host "!! brain-env.js failed."; exit 1 }
 $envLines | ForEach-Object { Invoke-Expression $_ }
 
+# Model nào phải tải về: đọc từ .env thật của brain, không ghim cứng. Ghim cứng "bge-m3" thì
+# người đổi SAG_EMBEDDING_MODEL sẽ có một API trỏ tới model chưa bao giờ được pull.
+$EmbeddingModel = "bge-m3"
+if (Test-Path $env:BRAIN_ENV_FILE) {
+  foreach ($line in Get-Content $env:BRAIN_ENV_FILE) {
+    if ($line -match '^\s*SAG_EMBEDDING_MODEL\s*=\s*(.+?)\s*$') { $EmbeddingModel = $Matches[1] }
+  }
+}
+
 $ComposeFiles = @("-f", (Join-Path $Stack "compose.yaml"))
+
+# Embedding dung chung toan may: mot container Ollama phuc vu moi project thay vi N ban sao cua
+# cung mot model. Phai dung TRUOC brain, vi compose.embedding-shared.yaml gan api vao network
+# `alice-embedding` bang `external: true` - network chua ton tai thi `up` hong ngay.
+$EmbeddingMode = if ($env:ALICE_EMBEDDING_MODE) { $env:ALICE_EMBEDDING_MODE } else { "shared" }
+$HubArgs = @("compose", "-p", "alice-embedding", "-f", (Join-Path $Stack "embedding-hub.yaml"))
+
+if ($EmbeddingMode -eq "external") {
+  # Nguoi dung da co embedding API cua rieng ho. Khong dung Ollama, khong pull model:
+  # 1,2 GB tai ve cho mot container khong ai goi toi la ngon tai nguyen doi lay so khong.
+  $ExternalUrl = if ($env:SAG_EMBEDDING_BASE_URL) { $env:SAG_EMBEDDING_BASE_URL } else { "set in the brain .env" }
+  Write-Host "Embedding    = external ($ExternalUrl) - nothing is started or downloaded"
+} elseif ($EmbeddingMode -eq "shared") {
+  $ComposeFiles += @("-f", (Join-Path $Stack "compose.embedding-shared.yaml"))
+  Write-Host "Embedding    = shared (one Ollama container for this whole machine)"
+  docker @HubArgs up -d
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "!! Could not start the shared embedding container."
+    Write-Host "   Fall back to one per project: put ALICE_EMBEDDING_MODE=project in $($env:BRAIN_ENV_FILE)"
+    if ($script:TranscriptOn) { try { Stop-Transcript | Out-Null } catch {} }
+    exit 1
+  }
+} else {
+  Write-Host "Embedding    = project (a private Ollama container for this brain)"
+}
 
 if ($env:BRAIN_MODE -eq "dev") {
   # Kiem tra that, khong tin loi khai trong .env: sai duong dan ma van chay tiep thi loi hien
@@ -95,9 +129,18 @@ if ($LASTEXITCODE -ne 0) {
   exit 1
 }
 
-Write-Host "Pulling the bge-m3 embedding model (a few minutes the first time)..."
-docker @dc exec -T embedding ollama pull bge-m3
-if ($LASTEXITCODE -ne 0) { Write-Host "!! Model pull failed. Run it manually: npm run brain:pull" }
+if ($EmbeddingMode -eq "external") {
+  Write-Host "Skipping the model download: this brain uses your own embedding endpoint."
+} else {
+  Write-Host "Pulling the $EmbeddingModel embedding model (a few minutes the first time)..."
+  if ($EmbeddingMode -eq "shared") {
+    # Model chi tai MOT lan cho ca may; project thu hai tro di buoc nay xong ngay.
+    docker @HubArgs exec -T embedding ollama pull $EmbeddingModel
+  } else {
+    docker @dc exec -T embedding ollama pull $EmbeddingModel
+  }
+  if ($LASTEXITCODE -ne 0) { Write-Host "!! Model pull failed. Run it manually: npm run brain:pull" }
+}
 
 Write-Host ""
 Write-Host "==> ALICE app: http://$($env:BRAIN_HOST):$($env:WEB_PORT)"

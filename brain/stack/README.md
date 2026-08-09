@@ -45,6 +45,44 @@ mình thì không".
 > HTML → `lib/api.ts`), nên cùng một image dùng cho mọi project mà web của project này không
 > bao giờ gọi nhầm sang API của project khác.
 
+### Embedding: ba chế độ
+
+Cô lập theo project là đúng cho **dữ liệu**, không phải cho **model**. Mỗi brain một container
+Ollama nghĩa là N bản sao của cùng một file `bge-m3` ~1,2 GB, cộng N container, trên một máy —
+mặc định đó chống lại đúng người dùng nhiều project. Và nếu người dùng **đã có** embedding API
+riêng thì dựng thêm Ollama là ngốn tài nguyên đổi lấy đúng con số không.
+
+| | `external` | `shared` (mặc định) | `project` |
+|---|---|---|---|
+| Kích hoạt khi | `.env` có `SAG_EMBEDDING_BASE_URL` | không khai gì | `ALICE_EMBEDDING_MODE=project` |
+| Container Ollama | **không có** | 1 cho cả máy | 1 cho mỗi brain |
+| Tải model | **không tải gì** | 1 lần, volume `alice-embedding-models` | 1 bản/brain trong `<BRAIN_ID>_ollama` |
+| DB / vector / upload | cách ly theo brain | cách ly theo brain | cách ly theo brain |
+| Khi nào dùng | đã có embedding API sẵn | mặc định | cần model / số chiều khác phần còn lại của máy |
+
+Khai `ALICE_EMBEDDING_MODE` tường minh thì luôn thắng: `external` | `shared` | `project`.
+
+**Cơ chế.** Compose của brain nhận `ALICE_EMBEDDING_REPLICAS=0` (service `embedding` của project
+không chạy) và `depends_on` có `required: false` để không đòi một service không tồn tại.
+`SAG_EMBEDDING_BASE_URL` trỏ về `http://alice-embedding:11434/v1` ở chế độ `shared`, hoặc **giữ
+nguyên giá trị người dùng khai** ở chế độ `external`. Riêng `shared` chồng thêm overlay
+`compose.embedding-shared.yaml` để gắn `api` vào network `alice-embedding` bằng `external: true`
+— gắn vào, không tạo và không xoá, nên `npm run brain:down` của project này không giật embedding
+của project khác.
+
+```bash
+npm run embedding             # chế độ, container, model đã tải, brain nào đang gắn vào
+npm run embedding:down:yes    # tắt embedding dùng chung — ẢNH HƯỞNG MỌI PROJECT (giữ model)
+```
+
+Container dùng chung **không publish cổng ra host**: brain nói chuyện với nó qua network nội bộ,
+nên không có đường nào từ LAN vào một endpoint không auth.
+
+> **Launcher chỉ đọc `.env`.** Endpoint embedding lưu ở **Settings → Models** ghi đè `.env` cho
+> API lúc chạy, nhưng launcher không thấy nó — nên nếu chỉ đổi trong UI thì Ollama vẫn được dựng.
+> Muốn ALICE thôi hẳn việc dựng/tải model, khai `SAG_EMBEDDING_BASE_URL` trong `.env` của brain.
+> Khi hai nguồn lệch nhau, API ghi rõ ra log lúc khởi động và UI hiện cảnh báo "env đang bị bỏ qua".
+
 ### Secret nằm ở đâu
 
 `SAG_SECRET_KEY` vừa ký JWT vừa là gốc dẫn xuất khoá mã hoá **mọi API key** trong DB, nên nó
@@ -72,10 +110,10 @@ npm run brain:down       # tắt (giữ data)
 |---|---|---|
 | `web` | App ALICE (Settings → Models để thêm provider LLM) | `3000` |
 | `api` | Backend + MCP (`/mcp/`) + REST | `8000` |
-| `embedding` | `bge-m3` local (Ollama, OpenAI-compatible) | nội bộ `11434` |
+| `embedding` | `bge-m3` local (Ollama, OpenAI-compatible) — mặc định là container **dùng chung cả máy** `alice-embedding` | nội bộ `11434`, không publish |
 
 ## Dữ liệu & vòng đời
-- Toàn bộ "não" (SQLite + LanceDB + upload) nằm trong **named volume** `<BRAIN_ID>_sagdata`, model Ollama ở `<BRAIN_ID>_ollama`. Không còn file dữ liệu nào trong cây repo → không thể lỡ tay commit, và copy thư mục project đi nơi khác không kéo theo "não".
+- Toàn bộ "não" (SQLite + LanceDB + upload) nằm trong **named volume** `<BRAIN_ID>_sagdata`. Model Ollama ở volume `alice-embedding-models` dùng chung cả máy (hoặc `<BRAIN_ID>_ollama` khi `ALICE_EMBEDDING_MODE=project`). Không còn file dữ liệu nào trong cây repo → không thể lỡ tay commit, và copy thư mục project đi nơi khác không kéo theo "não".
 - Xem/sao lưu: `docker volume ls`, hoặc `docker run --rm -v <BRAIN_ID>_sagdata:/d -v "$PWD":/out alpine tar czf /out/brain-backup.tgz -C /d .`
 - `npm run uninstall:yes` gỡ **sạch**: container, network, volume, image của brain
   này, image mồ côi, **và build cache của Docker** — phần cuối thường là vài chục GB và là lý do
@@ -98,6 +136,30 @@ Nếu Docker Desktop báo hàng chục GB nhưng RAM container vẫn bình thư�
 **RAM container**, **named volume dữ liệu**, **image** và **build cache**
 trước khi xoá; `npm run uninstall:yes` là thao tác phá huỷ runtime/volume, không phải nút chẩn đoán.
 - Mất data vẫn dựng lại được từ file: `npm run sync:rebuild`.
+
+### Windows: dọn rác trong Docker KHÔNG trả lại dung lượng cho ổ C:
+
+Trên Docker Desktop + WSL2, mọi thứ của Docker nằm trong một đĩa ảo
+`%LOCALAPPDATA%\Docker\wsl\...\ext4.vhdx` (bản mới: `disk\docker_data.vhdx`). File `.vhdx` chỉ
+**phình ra, không tự co lại**. Vì vậy `docker system prune`, `npm run uninstall:yes`, xoá image
+hay xoá volume đều giải phóng chỗ **bên trong** đĩa ảo cho lần dùng sau, nhưng dung lượng ổ C:
+thì **không nhúc nhích một byte nào**. Nhìn `docker system df` thấy trống trong khi Explorer vẫn
+báo đầy là đúng như thiết kế, không phải máy hỏng.
+
+Muốn thật sự lấy lại chỗ trên ổ C: phải **co thủ công** đĩa ảo đó, sau khi đã dọn trong Docker:
+
+```powershell
+wsl --shutdown
+Optimize-VHD -Path "$env:LOCALAPPDATA\Docker\wsl\disk\docker_data.vhdx" -Mode Full
+```
+
+`Optimize-VHD` thuộc module Hyper-V và cần PowerShell **Administrator**. Máy không có Hyper-V thì
+dùng `diskpart` (`select vdisk file="..."` → `attach vdisk readonly` → `compact vdisk` →
+`detach vdisk`). Đường dẫn `.vhdx` đúng của máy mình: xem Docker Desktop → Settings → Resources →
+Advanced → Disk image location.
+
+> Đây là lý do một máy có thể đang **kẹt hàng chục GB** trong `.vhdx` dù Docker báo gần như trống.
+> Bước co đĩa là thao tác của người dùng trên máy Windows; ALICE không tự chạy nó.
 
 ## Log ra file
 | Log | Đường dẫn | Gồm gì |

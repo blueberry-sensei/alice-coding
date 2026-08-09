@@ -120,6 +120,51 @@ function writeEnvFile(file, values, header) {
   }
 }
 
+/* --------------------------------------------------------------- embedding */
+
+/** Tên compose project + network + container của embedding dùng chung toàn máy. */
+const EMBEDDING_HUB_PROJECT = "alice-embedding";
+const EMBEDDING_HUB_CONTAINER = "alice-embedding";
+const EMBEDDING_HUB_URL = `http://${EMBEDDING_HUB_CONTAINER}:11434/v1`;
+
+/**
+ * `external` | `shared` (mặc định) | `project`.
+ *
+ * - **external** — người dùng đã tự khai `SAG_EMBEDDING_BASE_URL` trong .env của brain, tức là
+ *   họ có sẵn một embedding API. Lúc đó ALICE **không dựng và không pull Ollama** ở bất kỳ đâu:
+ *   kéo 1,2 GB model rồi giữ một container không ai gọi tới là ngốn tài nguyên của khách để đổi
+ *   lấy đúng con số không.
+ * - **shared** (mặc định) — một container Ollama cho cả máy. Cô lập theo project là đúng cho DỮ
+ *   LIỆU, không phải cho MODEL: mỗi brain một container nghĩa là N bản sao của cùng một file
+ *   bge-m3 ~1,2 GB trên một máy.
+ * - **project** — một container Ollama riêng cho brain này; cần khi project phải chạy model hoặc
+ *   số chiều khác phần còn lại của máy.
+ *
+ * `ALICE_EMBEDDING_MODE` khai tường minh thì luôn thắng; không khai thì suy từ việc có
+ * `SAG_EMBEDDING_BASE_URL` hay không.
+ */
+function embeddingMode(values = {}) {
+  const raw = String(values.ALICE_EMBEDDING_MODE || "").trim().toLowerCase();
+  if (raw === "project" || raw === "shared" || raw === "external") return raw;
+  return String(values.SAG_EMBEDDING_BASE_URL || "").trim() ? "external" : "shared";
+}
+
+/**
+ * Biến compose suy ra từ chế độ embedding (không lưu vào .env — suy lại mỗi lần chạy).
+ *
+ * Chế độ `external` KHÔNG trả `SAG_EMBEDDING_BASE_URL`: giá trị của người dùng nằm trong .env và
+ * compose tự nội suy từ đó. Trả về ở đây là ghi đè chính thứ họ vừa khai.
+ */
+function embeddingVars(mode, values = {}) {
+  if (mode === "external") {
+    return { ALICE_EMBEDDING_REPLICAS: "0" };
+  }
+  if (mode === "shared") {
+    return { ALICE_EMBEDDING_REPLICAS: "0", SAG_EMBEDDING_BASE_URL: EMBEDDING_HUB_URL };
+  }
+  return { ALICE_EMBEDDING_REPLICAS: "1", SAG_EMBEDDING_BASE_URL: "http://embedding:11434/v1" };
+}
+
 /* ------------------------------------------------------------------- ports */
 
 function portFree(port) {
@@ -234,6 +279,8 @@ async function resolve({ root = ROOT } = {}) {
     fs.rmSync(legacyFile);
   }
 
+  const embedding = embeddingMode(values);
+
   return {
     BRAIN_ID: id,
     BRAIN_HOST: brainHost(id),
@@ -241,6 +288,10 @@ async function resolve({ root = ROOT } = {}) {
     BRAIN_ENV_FILE: envFile,
     BRAIN_LOGS: logs,
     BRAIN_ROOT: path.resolve(root),
+    // "external" = người dùng có sẵn embedding API, ALICE không dựng gì;
+    // "shared" = một container Ollama cho cả máy; "project" = một container cho brain này.
+    ALICE_EMBEDDING_MODE: embedding,
+    ...embeddingVars(embedding, values),
     // "image" = kéo image dựng sẵn (đường của mọi người dùng, không cần git/source).
     // "dev"   = build từ source trên máy; chỉ bật khi CẢ HAI đường dẫn được khai báo.
     BRAIN_MODE: values.ALICE_APP_PATH && values.ALICE_CORE_PATH ? "dev" : "image",
@@ -270,6 +321,7 @@ function peek({ root = ROOT } = {}) {
     WEB_PORT: values.WEB_PORT || "3000",
     API_PORT: values.API_PORT || "8000",
     BRAIN_MODE: values.ALICE_APP_PATH && values.ALICE_CORE_PATH ? "dev" : "image",
+    ALICE_EMBEDDING_MODE: embeddingMode(values),
     ALICE_APP_PATH: values.ALICE_APP_PATH || "",
     ALICE_CORE_PATH: values.ALICE_CORE_PATH || "",
   };
@@ -282,10 +334,16 @@ function peek({ root = ROOT } = {}) {
  * để build từ đó — đây là đường của người phát triển chính alice-brain/alice-core, không phải
  * đường của người dùng.
  */
-function composeFiles(mode) {
+function composeFiles(mode, embedding = "shared") {
   const files = ["-f", path.join(STACK, "compose.yaml")];
   if (mode === "dev") files.push("-f", path.join(STACK, "compose.dev.yaml"));
+  if (embedding === "shared") files.push("-f", path.join(STACK, "compose.embedding-shared.yaml"));
   return files;
+}
+
+/** `-p ... -f ...` cho stack embedding dùng chung toàn máy. */
+function hubComposeArgs() {
+  return ["compose", "-p", EMBEDDING_HUB_PROJECT, "-f", path.join(STACK, "embedding-hub.yaml")];
 }
 
 /** Mọi brain đã từng dựng trên máy này (đọc từ state dir, không cần Docker). */
@@ -348,7 +406,13 @@ module.exports = {
   brainId,
   brainHost,
   composeFiles,
+  hubComposeArgs,
+  embeddingMode,
+  embeddingVars,
   stateRoot,
+  EMBEDDING_HUB_PROJECT,
+  EMBEDDING_HUB_CONTAINER,
+  EMBEDDING_HUB_URL,
   ROOT,
   STACK,
 };

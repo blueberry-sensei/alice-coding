@@ -142,12 +142,19 @@ def load_config(path):
                 continue
             k, v = line.split("=", 1)
             cfg[k.strip()] = v.strip()
-    # Bản cũ chép hai default cứng vào brain.config. Coi đúng hai giá trị đó là default kế
+    # Bản cũ chép ba default cứng vào brain.config. Coi đúng ba giá trị đó là default kế
     # thừa để project đang dùng tự nhận port + source identity mới; giá trị tuỳ chỉnh vẫn giữ.
     if RUNTIME_API_PORT and cfg["SAG_API_BASE"] == LEGACY_API_BASE:
         cfg["SAG_API_BASE"] = "http://localhost:%s/api/v1" % RUNTIME_API_PORT
     if RUNTIME_BRAIN_ID and cfg["BRAIN_SOURCE_NAME"] == LEGACY_SOURCE_NAME:
         cfg["BRAIN_SOURCE_NAME"] = "%s-knowledge" % RUNTIME_BRAIN_ID
+    # `brain.config` là file INSTANCE — `npm run update` không bao giờ chép đè. Nên mọi project
+    # đang chạy vẫn giữ dòng `SAG_AUTH_NAME=Alice` mà example đời cũ đặt sẵn, và nếu tin dòng đó
+    # là lựa chọn của người dùng thì sync sẽ ĐỔI TÊN identity của họ thành "Alice" ngay lần chạy
+    # đầu sau nâng cấp. Đúng giá trị mặc định cũ = không phải lựa chọn: bỏ đi để mở phiên rỗng.
+    # Ai thật sự muốn tên đó cũng ra kết quả y hệt — phiên rỗng trả về đúng identity đang có.
+    if cfg["SAG_AUTH_NAME"].strip() == LEGACY_AUTH_NAME:
+        cfg["SAG_AUTH_NAME"] = ""
     for k in list(cfg):                          # env override
         if os.environ.get(k):
             cfg[k] = os.environ[k]

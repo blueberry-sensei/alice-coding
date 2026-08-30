@@ -100,6 +100,10 @@ LEGACY_SOURCE_NAME = "alice-knowledge"
 RUNTIME_BRAIN_ID = os.environ.get("ALICE_BRAIN_ID", "").strip()
 RUNTIME_API_PORT = os.environ.get("ALICE_BRAIN_API_PORT", "").strip()
 
+#: Tên mà bản <= 2.4.17 luôn gửi. Chỉ dùng cho brain đời cũ chưa nhận được image mới —
+#: giữ nguyên tên đó để nhánh lùi không đổi hành vi so với bản người dùng đang chạy.
+LEGACY_AUTH_NAME = "Alice"
+
 DEFAULTS = {
     "SAG_API_BASE": (
         "http://localhost:%s/api/v1" % RUNTIME_API_PORT
@@ -150,7 +154,16 @@ def load_config(path):
     return cfg
 
 
-def http(method, url, token=None, data=None, timeout=None):
+class HttpStatusError(Exception):
+    """Lỗi HTTP mà chỗ gọi đã KHAI BÁO là biết cách xử lý (xem tham số `tolerate`)."""
+
+    def __init__(self, code, detail):
+        super().__init__("HTTP %s: %s" % (code, detail))
+        self.code = code
+        self.detail = detail
+
+
+def http(method, url, token=None, data=None, timeout=None, tolerate=()):
     if timeout is None:
         timeout = int(os.environ.get("BRAIN_SYNC_TIMEOUT", "180"))
     headers = {"Content-Type": "application/json"}
@@ -164,6 +177,8 @@ def http(method, url, token=None, data=None, timeout=None):
             return json.loads(raw) if raw else {}
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", "replace")[:300]
+        if e.code in tolerate:
+            raise HttpStatusError(e.code, detail)
         raise SystemExit("[brain-sync] HTTP %s %s %s: %s" % (e.code, method, url, detail))
     except urllib.error.URLError as e:
         raise SystemExit("[brain-sync] Cannot reach %s (%s). Is the brain running? "
@@ -180,13 +195,33 @@ def as_items(res):
 
 
 def get_token(cfg):
-    # Brain mở phiên cục bộ với body rỗng: một brain là một người dùng trên máy của chính họ.
-    # Chỉ gửi tên khi người dùng cố ý đặt SAG_AUTH_NAME — gửi tên mặc định sẽ ĐỔI TÊN identity
-    # đang có của họ, vì login cục bộ nhận tên mới là lệnh đổi tên.
+    """Lấy JWT: phiên cục bộ rỗng trước, brain đời cũ thì lùi về hợp đồng có tên.
+
+    Một brain là một người dùng trên máy của chính họ, nên body rỗng là đủ — và quan trọng hơn,
+    body rỗng KHÔNG đổi tên identity đang có, còn gửi tên thì có (login cục bộ coi tên mới là
+    lệnh đổi tên).
+
+    Nhánh lùi tồn tại vì template và image được phát hành rời nhau: `npm run update` lấy template
+    từ git ngay lập tức, còn image `alice-brain` phải đợi CI build xong. Trong khoảng đó, brain
+    đang chạy vẫn bắt buộc có `name` và trả 422 cho body rỗng. Không có nhánh này thì `npm run
+    sync` chết cho tới khi người dùng kéo được image mới.
+    """
     if cfg["SAG_TOKEN"]:
         return cfg["SAG_TOKEN"]
-    payload = {"name": cfg["SAG_AUTH_NAME"]} if cfg["SAG_AUTH_NAME"].strip() else {}
-    res = http("POST", cfg["SAG_API_BASE"] + "/auth/login", data=payload)
+
+    url = cfg["SAG_API_BASE"] + "/auth/login"
+    name = cfg["SAG_AUTH_NAME"].strip()
+    if name:
+        res = http("POST", url, data={"name": name})
+    else:
+        try:
+            res = http("POST", url, data={}, tolerate=(400, 422))
+        except HttpStatusError:
+            print("[brain-sync] This brain still requires a login name; falling back to "
+                  "'%s'. Run `npm run brain` to pull the current image, which opens a local "
+                  "session without one." % LEGACY_AUTH_NAME)
+            res = http("POST", url, data={"name": LEGACY_AUTH_NAME})
+
     tok = res.get("access_token") or res.get("token")
     if not tok:
         raise SystemExit("[brain-sync] Login failed: %s" % res)

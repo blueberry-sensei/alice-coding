@@ -22,10 +22,13 @@ Chạy **một lần là xong**: launcher tự chọn script đúng môi trườ
 Vận hành/log/dừng: [stack/README.md](stack/README.md).
 
 ## Bước 2 — Cấu hình LLM trên app
-Mở địa chỉ project mà launcher in ra rồi làm ba việc:
-1. **`http://<BRAIN_ID>.localhost:<WEB_PORT>`** → nhập tên tạo identity (vd `Alice`).
-2. **Settings → Models** → thêm provider LLM. Đề xuất **AIStudio/Gemini free** ([lấy key](https://aistudio.google.com/apikey)) hoặc OpenRouter free. *Embedding không cần set — đã bundled `bge-m3`.*
-3. Tạo source thử + ingest 1 đoạn text + search → xác nhận embedding & LLM chạy.
+Mở địa chỉ project mà launcher in ra rồi làm hai việc:
+1. **Settings → Models** → thêm provider LLM. Đề xuất **AIStudio/Gemini free** ([lấy key](https://aistudio.google.com/apikey)) hoặc OpenRouter free. *Embedding không cần set — đã bundled `bge-m3`.*
+2. Tạo source thử + ingest 1 đoạn text + search → xác nhận embedding & LLM chạy.
+
+> **Không có bước đăng nhập.** Mỗi brain là một người dùng, chạy trên máy của chính người đó, nên
+> app tự mở phiên ngay khi mở trang — không hỏi tên, không popup cấu hình model. Chưa có provider
+> thì header hiện **Model not configured**; bấm vào đó là tới đúng chỗ cần điền.
 
 ### Nhiều provider, tự chuyển nhà khi hết quota
 
@@ -34,9 +37,14 @@ Thêm được nhiều provider và xếp **thứ tự ưu tiên**. Hệ thống
 | Tình huống | Xử lý |
 | --- | --- |
 | Timeout / kết nối / lỗi 5xx | Thử lại **cùng** provider (backoff) |
-| 429 / hết quota | Chuyển ngay sang provider kế, cho provider này nghỉ một lúc |
+| 429 / hết quota | Chuyển ngay sang provider kế, và cho provider này nghỉ **đúng bằng `Retry-After` mà chính nó yêu cầu**; không nói gì thì nghỉ theo ô cooldown |
 | Sai API key / model không tồn tại | Tắt provider đó, chuyển nhà, **báo rõ lý do** |
 | Request không hợp lệ | Dừng luôn — đổi nhà cũng lỗi y vậy |
+
+429 không phải một loại lỗi mà là **hai** loại chung một mã: trần theo phút (RPM/TPM — server nói
+`Retry-After: 12`, chờ mười mấy giây là chạy tiếp) và hết quota theo ngày (server nói một con số
+rất lớn). Vì vậy con số của server luôn thắng ô cooldown: nghỉ 60 giây cho một lệnh cấm một tiếng
+chỉ làm ban dài thêm, còn nghỉ 60 giây cho một trần 5 giây thì phí mất provider tốt nhất trong chuỗi.
 
 Cần ép backend cụ thể (vd OpenRouter → `deepinfra/fp4`) thì điền vào ô **extra body**:
 `{"provider": {"order": ["deepinfra/fp4"], "allow_fallbacks": false}}`.

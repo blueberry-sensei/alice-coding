@@ -234,7 +234,8 @@ Nếu Bệ hạ muốn bật kiểm phủ sóng code→wiki: tạo `tools/verify
 > trước lúc đó, nên search ra kết quả sớm **không phải** bằng chứng brain đã sẵn sàng.
 
 Khi đã có LLM:
-1. Copy `brain/brain.config.example` → `brain/brain.config`; chỉ điền token/tên login nếu cần.
+1. Copy `brain/brain.config.example` → `brain/brain.config`; để trống phần auth là đủ (brain tự mở
+   phiên cục bộ), chỉ điền khi cố ý đặt tên identity hoặc dán sẵn token.
    API port và source name tự lấy theo brain của project (`<BRAIN_ID>-knowledge`), không gõ tay.
 2. `npm run sync` → **tự chạy verify trước** (dừng nếu còn ERROR), rồi ingest **chỉ** folder `knowledge/`.
 3. **Cắm brain vào agent — INIT TỰ LÀM, trước khi smoke.** Nếu MCP `brain` đã có trong phiên thì dùng

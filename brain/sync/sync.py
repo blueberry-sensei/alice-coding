@@ -105,7 +105,7 @@ DEFAULTS = {
         "http://localhost:%s/api/v1" % RUNTIME_API_PORT
         if RUNTIME_API_PORT else LEGACY_API_BASE
     ),
-    "SAG_AUTH_NAME": "Alice",
+    "SAG_AUTH_NAME": "",
     "SAG_TOKEN": "",
     "BRAIN_SOURCE_NAME": (
         "%s-knowledge" % RUNTIME_BRAIN_ID
@@ -180,9 +180,13 @@ def as_items(res):
 
 
 def get_token(cfg):
+    # Brain mở phiên cục bộ với body rỗng: một brain là một người dùng trên máy của chính họ.
+    # Chỉ gửi tên khi người dùng cố ý đặt SAG_AUTH_NAME — gửi tên mặc định sẽ ĐỔI TÊN identity
+    # đang có của họ, vì login cục bộ nhận tên mới là lệnh đổi tên.
     if cfg["SAG_TOKEN"]:
         return cfg["SAG_TOKEN"]
-    res = http("POST", cfg["SAG_API_BASE"] + "/auth/login", data={"name": cfg["SAG_AUTH_NAME"]})
+    payload = {"name": cfg["SAG_AUTH_NAME"]} if cfg["SAG_AUTH_NAME"].strip() else {}
+    res = http("POST", cfg["SAG_API_BASE"] + "/auth/login", data=payload)
     tok = res.get("access_token") or res.get("token")
     if not tok:
         raise SystemExit("[brain-sync] Login failed: %s" % res)

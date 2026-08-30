@@ -6,9 +6,10 @@
 # Mặc định tự lấy cổng API đúng của project từ `npm run sync`.
 # Chỉ bỏ comment khi cố ý trỏ sang một brain khác:
 # SAG_API_BASE=http://localhost:8000/api/v1
-# Cách 1: để sync.py tự login bằng tên (local identity của SAG)
-SAG_AUTH_NAME=Alice
-# Cách 2: dán sẵn JWT (ưu tiên nếu có); lấy từ POST /auth/login
+# Để trống: brain tự mở phiên cục bộ (một brain = một người dùng trên máy của chính họ).
+# Chỉ điền khi muốn ĐẶT TÊN cho identity — tên khác tên đang có sẽ đổi tên identity đó.
+SAG_AUTH_NAME=
+# Hoặc dán sẵn JWT (ưu tiên nếu có); lấy từ POST /auth/login
 SAG_TOKEN=
 
 # --- Source của brain ---

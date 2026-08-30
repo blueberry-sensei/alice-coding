@@ -163,7 +163,13 @@ if [ "$BRAIN_MODE" = "dev" ]; then
   dc up -d --build
 else
   echo "Pulling ALICE images (a few minutes the first time)..."
-  dc pull || {
+  # `docker compose pull` KHÔNG nhìn `deploy.replicas`: nó kéo image của MỌI service khai trong
+  # file, kể cả `embedding` đang ở replicas=0. Ở chế độ external/shared đó là vài trăm MB tải về
+  # cho một container không bao giờ khởi động — đúng thứ dòng "nothing is started or downloaded"
+  # vừa hứa là không làm. Nên chỉ kéo image của những service SẼ chạy thật.
+  PULL_SERVICES=(api web)
+  [ "${ALICE_EMBEDDING_REPLICAS:-1}" = "0" ] || PULL_SERVICES+=(embedding)
+  dc pull "${PULL_SERVICES[@]}" || {
     echo "!! Could not pull the images. Check your network, or they may not be published yet."
     echo "   Have the sources locally? Set ALICE_APP_PATH + ALICE_CORE_PATH in $BRAIN_ENV_FILE"
     echo "   to build from them instead of pulling."

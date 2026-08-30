@@ -113,7 +113,12 @@ if ($env:BRAIN_MODE -eq "dev") {
   docker @dc up -d --build
 } else {
   Write-Host "Pulling ALICE images (a few minutes the first time)..."
-  docker @dc pull
+  # `docker compose pull` KHONG nhin `deploy.replicas`: no keo image cua MOI service khai trong
+  # file, ke ca `embedding` dang o replicas=0. O che do external/shared do la vai tram MB tai ve
+  # cho mot container khong bao gio khoi dong. Chi keo image cua nhung service SE chay that.
+  $PullServices = @("api", "web")
+  if ($env:ALICE_EMBEDDING_REPLICAS -ne "0") { $PullServices += "embedding" }
+  docker @dc pull @PullServices
   if ($LASTEXITCODE -ne 0) {
     Write-Host "!! Could not pull the images. Check your network, or they may not be published yet."
     Write-Host "   Have the sources locally? Set ALICE_APP_PATH + ALICE_CORE_PATH in $($env:BRAIN_ENV_FILE)"

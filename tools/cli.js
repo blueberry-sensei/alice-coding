@@ -484,7 +484,18 @@ async function usesBundledEmbedding(apiPort) {
 async function reconcileEmbedding(info) {
   const mode = embeddingModeHere();
   const usesBundled = await usesBundledEmbedding(info.API_PORT);
-  if (usesBundled === null) return;   // brain cũ hoặc chạy ngoài stack -> không kết luận gì
+  if (usesBundled === null) {
+    // Không kết luận được. Trước đây return im lặng — và đó chính là cách một brain đã trỏ
+    // embedding ra ngoài vẫn bị dựng Ollama + tải 1,2 GB ở MỌI lần chạy mà không ai biết vì sao.
+    // Im lặng ở đây là bỏ mất tín hiệu duy nhất người dùng có.
+    if (mode !== "external") {
+      console.log(C.y("\nCould not tell which embedding endpoint this brain actually uses"));
+      console.log(C.d("  (/system/capabilities did not answer, or this image predates 2.4.16)."));
+      console.log(C.d("  If it points somewhere else, the container ALICE just started is idle."));
+      console.log(C.d("  Check: ") + C.b("npm run embedding"));
+    }
+    return;
+  }
 
   // ── Chiều 2: brain CẦN container nhưng ta đang ở external do tự ghi trước đó ──
   // Xảy ra khi người dùng bỏ endpoint riêng trong app. Không có nhánh này thì brain kẹt ở

@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
-"""Brain sync — đồng bộ folder knowledge/ vào SAG mà KHÔNG tạo document trùng.
+"""Brain sync — đồng bộ knowledge/ vào não theo từng ENTRY, event do chính phía ghi bóc sẵn.
 
-File knowledge/ là source-of-truth. Script giữ map file -> {document_id, sha256}
-trong brain/.sync-state.json, rồi create/update/delete theo diff.
-- update = delete document cũ + ingest lại (SAG không có upsert/idempotency).
-- --rebuild = xoá sạch source rồi ingest lại toàn bộ (khi mất .sag-data / đổi embedding model).
+Đơn vị đồng bộ là ENTRY, không phải file: mỗi `## D-xxxx`/`## M-xxxx` trong LOG, mỗi mục `##`
+trong wiki/context/changelog là một document riêng. Sửa một quyết định chỉ gửi lại đúng entry
+đó; 6.000 dòng còn lại không bị đụng tới.
 
-TRƯỚC KHI SYNC, script chạy tools/verify.py và DỪNG nếu kho tri thức có ERROR — xem
-run_verify(). Đây là forcing function portable của hệ thống (không cần hook riêng agent).
+Event của entry KHÔNG do LLM của brain bóc nữa — xem `entry_events()`:
+- entry có khối `- **Sự kiện:**` → mỗi dòng con là một event agent tự viết;
+- không có → suy TẤT ĐỊNH từ cấu trúc (mỗi bullet/đoạn/dòng bảng là một event).
+Entity của event: ID `D-/M-xxxx`, tag `#...`, đoạn trong backtick, cộng ID/tag/đường dẫn của entry.
+Brain chỉ chunk + gọi embedding (`POST .../documents/ingest-extracted`), không gọi LLM.
 
-SAU KHI SYNC, script CHỜ Brain xử lý xong rồi mới kết luận — xem await_documents(). Document
-nào FAILED thì sync **exit 1**. Ingest trả về ngay, còn vector hoá chạy nền, nên nếu chỉ nhìn
-lượt ingest thì embedding hỏng vẫn cho ra "done" và exit 0 trong khi não không có vector nào.
+State brain/.sync-state.json giữ map title -> {document_id, sha256, line}. sha256 băm nội dung
+entry (không băm số dòng), nên entry chỉ bị dời dòng thì chỉ cập nhật vị trí (`.../origins`).
+Thay thế: ingest bản mới -> chờ READY -> source idle -> xoá đúng document cũ.
+
+TRƯỚC KHI SYNC chạy tools/verify.py --json. Entry/file nào có ERROR thì GIỮ LẠI (báo rõ, não giữ
+bản trước đó), phần sạch vẫn sync — xem verify_gate(). ERROR không gắn được vào file nào thì dừng.
 
 Chỉ dùng thư viện chuẩn. Chạy: python brain/sync/sync.py [--rebuild] [--no-verify] [--no-wait]
 """
@@ -19,10 +24,13 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
+from itertools import zip_longest
 from pathlib import Path
 
 for _stream in (sys.stdout, sys.stderr):        # tiếng Việt trên console Windows
@@ -41,6 +49,7 @@ KNOWLEDGE_DIR = BRAIN_DIR.parent                 # .../knowledge
 # traceback (đi qua stderr) cũng vào log.
 LOG_DIR = BRAIN_DIR / ".logs"
 LOG_FILE = LOG_DIR / "sync.log"
+LOCK_FILE = LOG_DIR / "sync.lock"
 LOG_MAX_BYTES = 5 * 1024 * 1024
 
 
@@ -58,7 +67,7 @@ class _Tee:
         try:
             for piece in text.splitlines(keepends=True):
                 if self._at_line_start and piece.strip():
-                    stamp = __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    stamp = time.strftime("%Y-%m-%d %H:%M:%S")
                     self._handle.write("%s  %s  " % (stamp, self._tag))
                 self._handle.write(piece)
                 self._at_line_start = piece.endswith("\n")
@@ -91,9 +100,51 @@ def _install_file_log():
     sys.stdout = _Tee(sys.stdout, handle, "OUT")
     sys.stderr = _Tee(sys.stderr, handle, "ERR")
 
-# Bump khi đổi cấu trúc .sync-state.json. State cũ hơn -> buộc --rebuild thay vì
-# diễn giải sai map file->document rồi tạo document trùng.
-STATE_SCHEMA = 2
+
+def _acquire_sync_lock():
+    """Một sync tại một thời điểm: hai lượt chồng nhau sẽ ingest/xoá đè lên nhau."""
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    handle = LOCK_FILE.open("a+b")
+    if os.name == "nt":
+        import msvcrt
+
+        handle.seek(0, os.SEEK_END)
+        if handle.tell() == 0:
+            handle.write(b"\0")
+            handle.flush()
+        while True:
+            try:
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+                return handle
+            except OSError:
+                time.sleep(0.25)
+
+    import fcntl
+
+    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+    return handle
+
+
+def _release_sync_lock(handle):
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    finally:
+        handle.close()
+
+
+# Bump khi đổi cấu trúc .sync-state.json. State v2 (theo file) được chuyển tự động — xem load_state().
+STATE_SCHEMA = 3
+# Bump khi đổi cách tách entry hoặc suy event: mọi entry sẽ được gửi lại đúng một lần.
+DERIVE_VERSION = "entries-v1"
 
 LEGACY_API_BASE = "http://localhost:8000/api/v1"
 LEGACY_SOURCE_NAME = "alice-knowledge"
@@ -120,16 +171,17 @@ DEFAULTS = {
     "BRAIN_EXCLUDE": "_TEMPLATE.md",
     "STATE_FILE": str(BRAIN_DIR / ".sync-state.json"),
     "BRAIN_SYNC_TIMEOUT": os.environ.get("BRAIN_SYNC_TIMEOUT", "180"),
-    # Chờ tối đa bấy nhiêu giây cho extraction/vector hoá xong trước khi kết luận. Ingest trả về
-    # ngay, việc thật chạy nền — không chờ thì sync không bao giờ biết tri thức có vào được não
-    # hay không, và đó chính là chỗ "exit 0 nhưng não rỗng".
-    "BRAIN_SYNC_WAIT": os.environ.get("BRAIN_SYNC_WAIT", "900"),
+    # Chờ tối đa bấy nhiêu giây cho chunk + vector hoá xong; lượt full đầu (~3000 entry) cần ~50 phút.
+    "BRAIN_SYNC_WAIT": os.environ.get("BRAIN_SYNC_WAIT", "3600"),
 }
 
 #: Trạng thái document phía Brain (khớp `DocumentStatus` của alice-brain).
 TERMINAL_OK = "ready"
 TERMINAL_FAILED = "failed"
 IN_PROGRESS = ("pending", "loading", "extracting")
+
+#: Hai file LOG: entry là `## D-xxxx` / `## M-xxxx`, nhãn của event là ID + trạng thái.
+LOG_FILES = ("decisions/LOG.md", "mistakes/LOG.md")
 
 
 def load_config(path):
@@ -152,7 +204,6 @@ def load_config(path):
     # đang chạy vẫn giữ dòng `SAG_AUTH_NAME=Alice` mà example đời cũ đặt sẵn, và nếu tin dòng đó
     # là lựa chọn của người dùng thì sync sẽ ĐỔI TÊN identity của họ thành "Alice" ngay lần chạy
     # đầu sau nâng cấp. Đúng giá trị mặc định cũ = không phải lựa chọn: bỏ đi để mở phiên rỗng.
-    # Ai thật sự muốn tên đó cũng ra kết quả y hệt — phiên rỗng trả về đúng identity đang có.
     if cfg["SAG_AUTH_NAME"].strip() == LEGACY_AUTH_NAME:
         cfg["SAG_AUTH_NAME"] = ""
     for k in list(cfg):                          # env override
@@ -204,14 +255,8 @@ def as_items(res):
 def get_token(cfg):
     """Lấy JWT: phiên cục bộ rỗng trước, brain đời cũ thì lùi về hợp đồng có tên.
 
-    Một brain là một người dùng trên máy của chính họ, nên body rỗng là đủ — và quan trọng hơn,
-    body rỗng KHÔNG đổi tên identity đang có, còn gửi tên thì có (login cục bộ coi tên mới là
-    lệnh đổi tên).
-
-    Nhánh lùi tồn tại vì template và image được phát hành rời nhau: `npm run update` lấy template
-    từ git ngay lập tức, còn image `alice-brain` phải đợi CI build xong. Trong khoảng đó, brain
-    đang chạy vẫn bắt buộc có `name` và trả 422 cho body rỗng. Không có nhánh này thì `npm run
-    sync` chết cho tới khi người dùng kéo được image mới.
+    Body rỗng KHÔNG đổi tên identity đang có, còn gửi tên thì có (login cục bộ coi tên mới là
+    lệnh đổi tên). Nhánh lùi tồn tại vì template và image được phát hành rời nhau.
     """
     if cfg["SAG_TOKEN"]:
         return cfg["SAG_TOKEN"]
@@ -289,18 +334,250 @@ def target_files(cfg):
     return root, files
 
 
-def load_state(cfg, rebuild):
+# ── Entry + event ───────────────────────────────────────────────────────────
+FENCE_RE = re.compile(r"^\s*(```|~~~)")
+HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
+LOG_HEADING_RE = re.compile(r"^##\s+([MD]-\d{4})\b")
+STATUS_RE = re.compile(r"^-\s+\*\*Trạng thái:\*\*\s*(.+?)\s*$")
+ITEM_RE = re.compile(r"^(\s*)(?:[-*+]|\d+[.)])\s+(.*)$")
+FIELD_RE = re.compile(r"^\*\*([^*]+?):\*\*\s*(.*)$")
+EVENT_BLOCK_RE = re.compile(r"^-\s+\*\*Sự kiện:\*\*\s*$")
+TABLE_RE = re.compile(r"^\s*\|")
+TABLE_SEP_RE = re.compile(r"^\s*\|?\s*:?-{3,}")
+BACKTICK_RE = re.compile(r"`([^`\n]+)`")
+ID_RE = re.compile(r"\b[DM]-\d{4}\b")
+TAG_RE = re.compile(r"(?<![\w/#&])#([A-Za-z][\w-]*[A-Za-z0-9])")
+CITATION_RE = re.compile(r"^([\w./@+-]+\.[A-Za-z0-9]+)(?::\d+)?(?:#[\w.$@-]+)?$")
+WORD_RE = re.compile(r"\w")
+#: Field đã nằm trong nhãn của entry (event tiêu đề mang trạng thái), không thành event riêng.
+SKIP_FIELDS = {"Trạng thái"}
+TITLE_MAX = 250
+
+
+def plain(text):
+    """Bỏ nhấn mạnh Markdown cho phần chữ của event; backtick giữ nguyên (nó mang định danh)."""
+    return re.sub(r"\*\*|__", "", text).strip()
+
+
+def clip(text, limit):
+    text = " ".join(text.split())
+    if len(text) <= limit:
+        return text
+    cut = text[:limit - 1]
+    return (cut[:cut.rfind(" ")] if " " in cut[limit // 2:] else cut).rstrip() + "…"
+
+
+def inline_entities(text):
+    """Entity viết sẵn trong câu: đoạn backtick, ID quyết định/lỗi, tag."""
+    out = []
+    for span in BACKTICK_RE.findall(text):
+        span = span.strip()
+        cite = CITATION_RE.match(span)
+        if ID_RE.fullmatch(span):
+            out.append(("work", span))
+        elif cite:
+            out.append(("work", cite.group(1)))
+        elif 2 <= len(span) <= 80:
+            out.append(("technology", span))
+    rest = BACKTICK_RE.sub(" ", text)
+    out += [("work", value) for value in ID_RE.findall(rest)]
+    out += [("concept", "#" + value) for value in TAG_RE.findall(rest)]
+    return out
+
+
+def make_event(line, label, crumbs, text, base_entities):
+    raw = text.strip()
+    body = plain(raw)
+    seen, entities = set(), []
+    for kind, name in list(base_entities) + inline_entities(raw):
+        key = (kind, name.lower())
+        if len(name.strip()) >= 2 and key not in seen:
+            seen.add(key)
+            entities.append({"type": kind, "name": name})
+    return {
+        "title": clip(body, TITLE_MAX),
+        "content": " › ".join([label] + [clip(plain(c), 120) for c in crumbs] + [body]),
+        "line": line,
+        "entities": entities,
+    }
+
+
+def explicit_events(lines):
+    """Khối `- **Sự kiện:**` của agent: [(dòng trong entry, câu)] hoặc None nếu entry không có."""
+    for index, raw in enumerate(lines):
+        if not EVENT_BLOCK_RE.match(raw):
+            continue
+        out = []
+        for offset, sub in enumerate(lines[index + 1:], start=index + 2):
+            if sub.strip() and not sub[:1].isspace():
+                break
+            item = ITEM_RE.match(sub)
+            if item and item.group(1):
+                out.append([offset, item.group(2)])
+            elif sub.strip() and out:
+                out[-1][1] += " " + sub.strip()
+        return [(line, text) for line, text in out]
+    return None
+
+
+def derived_events(lines, first_line):
+    """Suy event tất định: mỗi bullet, đoạn văn, dòng bảng, tiêu đề con là một mệnh đề.
+
+    Trả về [(dòng trong entry, breadcrumb, câu)]; breadcrumb (field, bullet cha, tiêu đề con)
+    đi kèm để câu đọc riêng vẫn trọn nghĩa.
+    """
+    out, stack, headings = [], [], []
+    current, table_header, in_fence = None, None, False
+    for line, raw in enumerate(lines, start=first_line):
+        if FENCE_RE.match(raw):
+            in_fence, current = not in_fence, None
+            continue
+        if in_fence:
+            continue
+        if not raw.strip():
+            current, table_header = None, None
+            continue
+        heading = HEADING_RE.match(raw)
+        if heading:
+            level = len(heading.group(1))
+            headings = [h for h in headings if h[0] < level]
+            out.append([line, [h[1] for h in headings], heading.group(2)])
+            headings.append((level, heading.group(2)))
+            stack, current = [], None
+            continue
+        crumbs = [h[1] for h in headings]
+        if TABLE_RE.match(raw):
+            cells = [cell.strip() for cell in raw.strip().strip("|").split("|")]
+            if table_header is None:
+                table_header = cells
+            elif not TABLE_SEP_RE.match(raw):
+                pairs = zip_longest(table_header, cells, fillvalue="")
+                out.append([line, crumbs, "; ".join(
+                    "%s: %s" % (head, cell) if head else cell for head, cell in pairs if cell)])
+            current = None
+            continue
+        item = ITEM_RE.match(raw)
+        if item:
+            indent = len(item.group(1).expandtabs(4))
+            while stack and stack[-1][0] >= indent:
+                stack.pop()
+            parents = crumbs + [label for _, label in stack]
+            field = FIELD_RE.match(item.group(2))
+            if field:
+                name, value = field.group(1).strip(), field.group(2)
+                stack.append((indent, name))
+                current = None
+                if name in SKIP_FIELDS or not value.strip():
+                    continue                       # field rỗng là khung cho các bullet con
+                current = [line, parents + [name], value]
+            else:
+                current = [line, parents, item.group(2)]
+                stack.append((indent, clip(plain(item.group(2)), 80)))
+            out.append(current)
+            continue
+        if current is not None:                      # dòng nối của bullet/đoạn đang mở
+            current[2] += " " + raw.strip()
+            continue
+        current = [line, crumbs, raw.strip()]
+        out.append(current)
+    return [(line, crumbs, text) for line, crumbs, text in out]
+
+
+def entry_events(relpath, entry):
+    """Event của một entry: tiêu đề (kèm trạng thái) + khối Sự kiện hoặc event suy từ cấu trúc."""
+    lines = entry["text"].split("\n")
+    heading = HEADING_RE.match(lines[0])
+    log_id = LOG_HEADING_RE.match(lines[0]) if relpath in LOG_FILES else None
+    status = next((m.group(1) for m in map(STATUS_RE.match, lines) if m), None)
+    if log_id:
+        tag = re.search(r"·\s+#([\w-]+)\s*$", lines[0])
+        base = [("work", log_id.group(1))] + ([("concept", "#" + tag.group(1))] if tag else [])
+        label = "%s (%s)" % (log_id.group(1), status) if status else log_id.group(1)
+    else:
+        base = [("work", relpath)]
+        label = "%s › %s" % (relpath, heading.group(2)) if heading else relpath
+
+    events = []
+    if heading:
+        title = heading.group(2) + (" — Trạng thái: %s" % status if status else "")
+        events.append(make_event(1, relpath, [], title, base))
+    body = lines[1:] if heading else lines
+    first = 2 if heading else 1
+    explicit = explicit_events(lines)
+    if explicit is not None:
+        found = [(line, [], text) for line, text in explicit]
+    else:
+        found = derived_events(body, first)
+    for line, crumbs, text in found:
+        if len(WORD_RE.findall(plain(text))) >= 3:
+            events.append(make_event(line, label, crumbs, text, base))
+    return events
+
+
+def parse_entries(relpath, text):
+    """Tách file thành entry theo `## ` (ngoài code fence); phần trước `##` đầu tiên là một entry."""
+    lines = text.split("\n")
+    starts, in_fence = [0], False
+    for index, raw in enumerate(lines):
+        if FENCE_RE.match(raw):
+            in_fence = not in_fence
+        elif not in_fence and raw.startswith("## ") and index > 0:
+            starts.append(index)
+    entries, titles = [], {}
+    for position, start in enumerate(starts):
+        end = starts[position + 1] if position + 1 < len(starts) else len(lines)
+        while start < end and not lines[start].strip():   # blank lines belong to no entry
+            start += 1
+        chunk = lines[start:end]
+        while chunk and not chunk[-1].strip():
+            chunk.pop()
+        if not chunk:
+            continue
+        log_id = LOG_HEADING_RE.match(chunk[0]) if relpath in LOG_FILES else None
+        if log_id:
+            key = log_id.group(1)
+        elif chunk[0].startswith("## "):
+            key = clip(chunk[0][3:], 200)
+        else:
+            key = ""
+        title = "%s#%s" % (relpath, key) if key else relpath
+        titles[title] = titles.get(title, 0) + 1
+        if titles[title] > 1:                         # tiêu đề trùng trong cùng file
+            title = "%s~%d" % (title, titles[title])
+        body = "\n".join(chunk)
+        entry = {
+            "title": title,
+            "path": relpath,
+            "line": start + 1,
+            "end_line": start + len(chunk),
+            "text": body,
+            "sha256": hashlib.sha256(("%s\n%s" % (DERIVE_VERSION, body)).encode("utf-8")).hexdigest(),
+        }
+        entry["events"] = entry_events(relpath, entry)
+        if entry["events"]:
+            entries.append(entry)
+    return entries
+
+
+# ── State ───────────────────────────────────────────────────────────────────
+def load_state(cfg):
     sp = Path(cfg["STATE_FILE"])
     if not sp.exists():
-        return {"schema": STATE_SCHEMA, "source_id": None, "files": {}}
+        return {"schema": STATE_SCHEMA, "source_id": None, "entries": {}, "retire": []}
     state = json.loads(sp.read_text(encoding="utf-8"))
     found = state.get("schema", 1)
-    if found != STATE_SCHEMA and not rebuild:
+    if found == 2:
+        # v2 theo dõi nguyên file. Document theo file KHÔNG bị xoá trước: chúng vẫn trả lời search
+        # cho tới khi mọi entry mới READY, rồi mới bị xoá ở cuối lượt — não không có lúc rỗng.
+        retire = [e.get("document_id") for e in state.get("files", {}).values() if e.get("document_id")]
+        print("[brain-sync] state v2 -> v3: %d file document(s) will be replaced by entries" % len(retire))
+        return {"schema": STATE_SCHEMA, "source_id": state.get("source_id"), "entries": {}, "retire": retire}
+    if found != STATE_SCHEMA:
         raise SystemExit(
-            "[brain-sync] .sync-state.json là schema v%s, script cần v%s.\n"
-            "  Chạy: python brain/sync/sync.py --rebuild  (dựng lại não từ file — an toàn,\n"
-            "  vì file knowledge/ mới là source-of-truth)." % (found, STATE_SCHEMA))
-    state["schema"] = STATE_SCHEMA
+            "[brain-sync] .sync-state.json là schema v%s, script cần v%s. Chạy `npm run sync:rebuild`\n"
+            "  (dựng lại não từ file — an toàn, vì file knowledge/ mới là source-of-truth)."
+            % (found, STATE_SCHEMA))
+    state.setdefault("retire", [])
     return state
 
 
@@ -309,55 +586,152 @@ def save_state(cfg, state):
         json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def run_verify(skip):
-    """Gate: kho tri thức hỏng thì KHÔNG cho sync.
+# ── Verify gate ─────────────────────────────────────────────────────────────
+def verify_gate(skip, entries, synced_paths):
+    """Gate: entry/file có ERROR thì giữ lại, phần sạch vẫn được sync.
 
-    Đây là forcing function của cả hệ thống. sync là chỗ nghẽn bắt buộc (không sync
-    thì não không có tri thức mới -> agent mất recall), nên đặt kiểm tra ở đây khiến
-    kỷ luật trở thành bắt buộc mà vẫn không cần hook riêng của agent nào.
+    Trả về ({title: [lý do]} của entry bị giữ, các file bị giữ nguyên cả file). Không nới luật
+    verify: `npm run verify` vẫn đỏ cho tới khi sửa xong, chỉ là một citation mồ côi ở chỗ này
+    không còn chặn tri thức ở chỗ khác. ERROR không gắn được vào file nào thì không biết phần nào
+    sạch -> dừng cả lượt.
     """
     if skip:
         print("[brain-sync] SKIPPING verify (--no-verify) - debugging only.")
-        return
+        return {}, set()
     script = KNOWLEDGE_DIR / "tools" / "verify.py"
     if not script.exists():
-        print("[brain-sync] ! tools/verify.py not found - skipping the gate.")
-        return
-    proc = subprocess.run([sys.executable, str(script)], cwd=str(KNOWLEDGE_DIR))
-    if proc.returncode != 0:
+        raise SystemExit("[brain-sync] tools/verify.py not found - refusing to sync unverified knowledge.")
+    proc = subprocess.run([sys.executable, str(script), "--json"], cwd=str(KNOWLEDGE_DIR),
+                          capture_output=True, text=True, encoding="utf-8")
+    try:
+        report = json.loads(proc.stdout)
+    except ValueError:
+        sys.stderr.write(proc.stdout + proc.stderr)
+        raise SystemExit("[brain-sync] tools/verify.py did not return a JSON report (exit %s)."
+                         % proc.returncode)
+    errors = [item for item in report.get("items", []) if item.get("level") == "ERROR"]
+    unplaced = [item for item in errors if not item.get("file")]
+    if unplaced:
+        for item in unplaced:
+            print("  [ERROR] %s %s" % (item.get("check"), item.get("msg")))
+        raise SystemExit("[brain-sync] DỪNG: verify có ERROR không gắn với file nào, nên không biết "
+                         "phần nào sạch để sync. Sửa rồi chạy lại.")
+
+    by_path = {}
+    for entry in entries:
+        by_path.setdefault(entry["path"], []).append(entry)
+    held, held_files = {}, set()
+    for item in errors:
+        path, line = item["file"], item.get("line")
+        where = "%s%s" % (path, ":%d" % line if line else "")
+        reason = "%s %s (%s)" % (item.get("check"), item.get("msg"), where)
+        if path not in synced_paths:
+            print("  [ERROR outside the brain scope, blocks nothing] %s" % reason)
+            continue
+        hit = [e for e in by_path.get(path, []) if line and e["line"] <= line <= e["end_line"]]
+        if not hit:                                  # lỗi của cả file, hoặc nằm ngoài mọi entry
+            held_files.add(path)
+            hit = by_path.get(path, [])
+        for entry in hit:
+            held.setdefault(entry["title"], []).append(reason)
+    return held, held_files
+
+
+# ── Brain calls ─────────────────────────────────────────────────────────────
+def ingest_entry(cfg, token, source_id, entry):
+    try:
+        res = http(
+            "POST",
+            "%s/sources/%s/documents/ingest-extracted" % (cfg["SAG_API_BASE"], source_id),
+            token=token,
+            data={
+                "title": entry["title"],
+                "text": entry["text"],
+                "origin_path": entry["path"],
+                "origin_line": entry["line"],
+                "events": entry["events"],
+            },
+            tolerate=(404, 405),
+        )
+    except HttpStatusError as error:
         raise SystemExit(
-            "\n[brain-sync] DỪNG: kho tri thức đang có ERROR (xem ở trên).\n"
-            "  Sync lúc này sẽ nhồi tri thức sai/mồ côi vào não và làm recall tệ đi.\n"
-            "  Sửa hết ERROR rồi chạy lại. Citation trôi dòng: python tools/verify.py --fix")
+            "[brain-sync] This brain does not accept pre-extracted entries (HTTP %s): its image is "
+            "older than this template. Run `npm run brain` to pull the current image, then sync again."
+            % error.code)
+    doc_id = res.get("id")
+    if not doc_id:
+        raise SystemExit("[brain-sync] Ingest returned no document id for %s: %s" % (entry["title"], res))
+    return doc_id
 
 
-def ingest(cfg, token, source_id, relpath, text):
-    res = http("POST", "%s/sources/%s/documents/ingest" % (cfg["SAG_API_BASE"], source_id),
-               token=token, data={"title": relpath, "text": text})
-    return res.get("id") or res.get("document_id") or (res.get("document") or {}).get("id")
+def move_origins(cfg, token, source_id, moves):
+    for start in range(0, len(moves), 500):
+        http("POST", "%s/sources/%s/documents/origins" % (cfg["SAG_API_BASE"], source_id),
+             token=token, data={"items": moves[start:start + 500]})
 
 
 def delete_doc(cfg, token, source_id, doc_id):
-    if not doc_id:
-        return
     try:
         http("DELETE", "%s/sources/%s/documents/%s" % (cfg["SAG_API_BASE"], source_id, doc_id),
-             token=token)
-    except SystemExit as e:
-        print("  ! ignoring delete error for %s: %s" % (doc_id, e))
+             token=token, tolerate=(404,))
+    except HttpStatusError:
+        pass  # một lượt trước đã xoá xong; mọi lỗi khác là fatal (để lại bản trùng là mất kiểm soát)
 
 
-def report_knowledge_sync(
-    cfg,
-    token,
-    source_id,
-    *,
-    created,
-    updated,
-    deleted,
-    skipped,
-    rebuild,
-):
+def fetch_documents(cfg, token, source_id):
+    """Map document_id -> document, đọc từ Brain."""
+    docs = as_items(http("GET", "%s/sources/%s/documents" % (cfg["SAG_API_BASE"], source_id),
+                         token=token))
+    return {d.get("id"): d for d in docs if d.get("id")}
+
+
+def await_documents(cfg, token, source_id, doc_ids, wait_seconds):
+    """Chờ các document vừa gửi tới trạng thái cuối; trả về (failed, pending).
+
+    `ingest` chỉ ĐĂNG KÝ document; chunk + vector hoá chạy nền. Không chờ thì embedding hỏng vẫn
+    ra "done" trong khi search không bao giờ thấy tri thức đó.
+    """
+    wanted = set(doc_ids)
+    deadline = time.time() + wait_seconds
+    announced = False
+    while True:
+        by_id = fetch_documents(cfg, token, source_id)
+        failed, pending = [], []
+        for doc_id in wanted:
+            doc = by_id.get(doc_id)
+            if doc is None:
+                failed.append({"id": doc_id, "title": "?", "error": "document is gone from the brain"})
+                continue
+            status = str(doc.get("status") or "").lower()
+            if status == TERMINAL_FAILED:
+                failed.append({"id": doc_id, "title": doc.get("filename") or doc_id,
+                               "error": doc.get("error") or "no reason reported"})
+            elif status in IN_PROGRESS:
+                pending.append(doc_id)
+        if not pending or time.time() >= deadline:
+            return failed, pending
+        if not announced:
+            print("[brain-sync] waiting for the brain to chunk + embed %d document(s) (up to %ds)..."
+                  % (len(pending), wait_seconds))
+            announced = True
+        time.sleep(2)
+
+
+def wait_source_idle(cfg, token, source_id, wait_seconds):
+    """Không xoá khi source còn document đang ghi vector store: lệnh xoá sẽ treo rồi bỏ lại bản trùng."""
+    deadline = time.time() + wait_seconds
+    while True:
+        busy = [d for d in fetch_documents(cfg, token, source_id).values()
+                if str(d.get("status") or "").lower() in IN_PROGRESS]
+        if not busy:
+            return
+        if time.time() >= deadline:
+            raise SystemExit("[brain-sync] the source is still processing %d document(s) after %ds; "
+                             "nothing was deleted. Run sync again later." % (len(busy), wait_seconds))
+        time.sleep(2)
+
+
+def report_knowledge_sync(cfg, token, source_id, *, created, updated, deleted, skipped, rebuild):
     """Ghi diff sau khi state đã lưu; telemetry lỗi không được làm ingest chạy lại."""
     if not created and not updated and not deleted:
         return
@@ -380,203 +754,149 @@ def report_knowledge_sync(
         if result.get("recorded") is not True:
             print("[brain-sync] WARNING: Brain accepted the sync but did not record telemetry.")
     except SystemExit as error:
-        print(
-            "[brain-sync] WARNING: knowledge was synced, but telemetry was not recorded: %s"
-            % error
-        )
-
-
-def fetch_documents(cfg, token, source_id):
-    """Map document_id -> document, đọc từ Brain."""
-    docs = as_items(http("GET", "%s/sources/%s/documents" % (cfg["SAG_API_BASE"], source_id),
-                         token=token))
-    return {d.get("id"): d for d in docs if d.get("id")}
-
-
-def await_documents(cfg, token, source_id, doc_ids, wait_seconds):
-    """Chờ Brain xử lý xong các document vừa gửi rồi trả về (failed, pending).
-
-    Vì sao phải chờ: `POST /documents/ingest` trả về ngay khi document được ĐĂNG KÝ; chunk hoá,
-    vector hoá và trích xuất chạy nền. Sync in "done" rồi thoát 0 ở đúng thời điểm chưa có gì
-    được kiểm chứng — embedding hỏng thì tri thức nằm trong DB mà không có vector, search không
-    bao giờ trả nó về, và không một lệnh nào trong chuỗi báo lỗi. Hỏng câm là kiểu hỏng tệ nhất:
-    người dùng tin là mình đã ghi được.
-    """
-    if not doc_ids or wait_seconds <= 0:
-        return [], list(doc_ids)
-
-    import time
-
-    wanted = set(doc_ids)
-    deadline = time.time() + wait_seconds
-    failed, pending, announced = [], list(wanted), False
-    while True:
-        by_id = fetch_documents(cfg, token, source_id)
-        failed, pending = [], []
-        for doc_id in wanted:
-            doc = by_id.get(doc_id)
-            if doc is None:
-                # Document biến mất khỏi Brain sau khi ingest là mất dữ liệu, không phải "đang chạy".
-                failed.append({"id": doc_id, "title": "?", "error": "document is gone from the brain"})
-                continue
-            status = str(doc.get("status") or "").lower()
-            if status == TERMINAL_FAILED:
-                failed.append({
-                    "id": doc_id,
-                    "title": doc.get("title") or doc.get("filename") or doc_id,
-                    "error": doc.get("error") or "no reason reported",
-                })
-            elif status in IN_PROGRESS:
-                pending.append(doc_id)
-        if not pending or time.time() >= deadline:
-            return failed, pending
-        if not announced:
-            print("[brain-sync] waiting for the brain to vectorise %d document(s) (up to %ds)..."
-                  % (len(pending), wait_seconds))
-            announced = True
-        time.sleep(3)
+        print("[brain-sync] WARNING: knowledge was synced, but telemetry was not recorded: %s" % error)
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Brain sync (SAG)")
+    ap = argparse.ArgumentParser(description="Brain sync (SAG), entry by entry")
     ap.add_argument("--config", default=str(BRAIN_DIR / "brain.config"))
     ap.add_argument("--rebuild", action="store_true",
-                    help="Xoá sạch source rồi ingest lại toàn bộ từ file")
+                    help="Gửi lại mọi entry rồi xoá mọi document cũ của source (không có lúc não rỗng)")
     ap.add_argument("--no-verify", action="store_true",
                     help="Bỏ qua gate tools/verify.py (KHÔNG khuyến khích)")
     ap.add_argument("--no-wait", action="store_true",
-                    help="Không chờ Brain vector hoá xong; sync sẽ KHÔNG phát hiện được document hỏng")
+                    help="Không chờ Brain vector hoá xong; sẽ KHÔNG phát hiện được document hỏng và không xoá bản cũ")
     args = ap.parse_args()
 
-    run_verify(args.no_verify)
-
     cfg = load_config(args.config)
-    state = load_state(cfg, args.rebuild)
+    root, files = target_files(cfg)
+    entries = []
+    for p in files:
+        rel = str(p.relative_to(root)).replace("\\", "/")
+        entries += parse_entries(rel, p.read_text(encoding="utf-8"))
+    synced_paths = {str(p.relative_to(root)).replace("\\", "/") for p in files}
+    held, held_files = verify_gate(args.no_verify, entries, synced_paths)
+
+    state = load_state(cfg)
     token = get_token(cfg)
     source_id = ensure_source(cfg, token, state)
     state["source_id"] = source_id
-    root, files = target_files(cfg)
-
-    def rel(p):
-        return str(p.relative_to(root)).replace("\\", "/")
-
-    if args.rebuild:
-        print("[brain-sync] REBUILD: deleting every document in the source, then re-ingesting...")
-        for d in as_items(http("GET", "%s/sources/%s/documents" % (cfg["SAG_API_BASE"], source_id),
-                                token=token)):
-            delete_doc(cfg, token, source_id, d.get("id"))
-        state["files"] = {}
-
-    # Trạng thái hiện tại của document trong não. Không đọc cái này thì mọi lượt sync sau chỉ
-    # nhìn sha256 và bỏ qua đúng những file đã hỏng ở lượt trước — file hỏng vĩnh viễn không
-    # được thử lại, mà sync vẫn báo "done".
     existing = fetch_documents(cfg, token, source_id)
 
-    seen, created, updated, deleted, skipped = set(), [], [], [], 0
-    for p in files:
-        r = rel(p)
-        seen.add(r)
-        h = hashlib.sha256(p.read_bytes()).hexdigest()
-        entry = state["files"].get(r)
-        # Only skip if the document actually exists in the brain. Skipping when
-        # state says "done" but the document was deleted by a previous crashed run
-        # is the root cause of silent data loss — the agent trusts missing memory.
-        #
-        # Và chỉ skip khi document đó KHÔNG hỏng: file không đổi nhưng document đang `failed`
-        # thì phải nạp lại, không phải bỏ qua.
-        if entry and entry.get("sha256") == h and entry.get("document_id") and not args.rebuild:
-            current = existing.get(entry["document_id"])
-            healthy = current is not None and str(current.get("status") or "").lower() != TERMINAL_FAILED
-            if healthy:
-                skipped += 1
+    if args.rebuild:
+        print("[brain-sync] REBUILD: every entry is sent again; old documents go only once all are READY.")
+        state["retire"] = sorted(set(state["retire"]) | set(existing))
+        state["entries"] = {}
+
+    tracked_ids = {e["document_id"] for e in state["entries"].values()}
+    untracked = [doc_id for doc_id in existing if doc_id not in tracked_ids and doc_id not in state["retire"]]
+    if untracked:
+        print("  ! %d document(s) in the source are not tracked by state; not deleting them automatically "
+              "(npm run sync:rebuild replaces everything)" % len(untracked))
+
+    seen, created, updated, moved, kept = set(), [], [], [], []
+    new_ids, skipped = [], 0
+    for entry in entries:
+        title = entry["title"]
+        seen.add(title)
+        current = state["entries"].get(title)
+        if title in held:
+            kept.append(title)
+            continue
+        if current and current["sha256"] == entry["sha256"]:
+            doc = existing.get(current["document_id"])
+            if doc is not None and str(doc.get("status") or "").lower() != TERMINAL_FAILED:
+                if current.get("line") != entry["line"]:
+                    moved.append((title, {"document_id": current["document_id"], "origin_line": entry["line"]}))
+                else:
+                    skipped += 1
                 continue
-            print("  ! re-ingesting %s (the brain has it as %s)"
-                  % (r, "failed" if current else "missing"))
-        # Ingest the new document FIRST — never leave a gap.
-        doc_id = ingest(cfg, token, source_id, r, p.read_text(encoding="utf-8"))
-        old_doc_id = entry.get("document_id") if entry else None
-        state["files"][r] = {"document_id": doc_id, "sha256": h}
-        # Save state per file so a crash never loses all progress.
-        save_state(cfg, state)
-        # Delete old document only after the new one exists and state reflects it.
-        if old_doc_id and old_doc_id != doc_id:
-            delete_doc(cfg, token, source_id, old_doc_id)
-        if entry:
-            updated.append(r)
-            print("  ~ update %s" % r)
+            print("  ! re-ingesting %s (the brain has it as %s)" % (title, "failed" if doc else "missing"))
+        doc_id = ingest_entry(cfg, token, source_id, entry)
+        if current:
+            state["retire"].append(current["document_id"])
+            updated.append(title)
         else:
-            created.append(r)
-            print("  + ingest %s" % r)
+            created.append(title)
+        state["entries"][title] = {"document_id": doc_id, "sha256": entry["sha256"], "line": entry["line"]}
+        new_ids.append(doc_id)
+        save_state(cfg, state)                       # crash giữa chừng không mất tiến độ
 
-    for r in list(state["files"]):                    # file đã xoá trên đĩa
-        if r not in seen:
-            delete_doc(cfg, token, source_id, state["files"][r].get("document_id"))
-            del state["files"][r]
-            deleted.append(r)
-            print("  - delete %s" % r)
-
+    if moved:
+        move_origins(cfg, token, source_id, [move for _, move in moved])
+        for title, move in moved:                    # chỉ ghi vị trí mới khi brain đã nhận
+            state["entries"][title]["line"] = move["origin_line"]
+    deleted = []
+    for title in list(state["entries"]):
+        # Entry biến mất khỏi file. Cả file đang bị giữ vì ERROR thì chưa kết luận được là mất thật.
+        if title not in seen and title.split("#", 1)[0] not in held_files:
+            state["retire"].append(state["entries"].pop(title)["document_id"])
+            deleted.append(title)
     save_state(cfg, state)
-    report_knowledge_sync(
-        cfg,
-        token,
-        source_id,
-        created=created,
-        updated=updated,
-        deleted=deleted,
-        skipped=skipped,
-        rebuild=args.rebuild,
-    )
-    print("[brain-sync] ingested: +%d ~%d -%d (skipped %d). source=%s (%s)"
-          % (len(created), len(updated), len(deleted), skipped, cfg["BRAIN_SOURCE_NAME"], source_id))
+
+    for title in kept:
+        print("  = HELD %s - verify ERROR, the brain keeps its previous copy:" % title)
+        for reason in held[title]:
+            print("      %s" % reason)
+    print("[brain-sync] sent: +%d ~%d -%d, moved %d, unchanged %d, held back %d."
+          % (len(created), len(updated), len(deleted), len(moved), skipped, len(kept)))
 
     if args.no_wait:
-        print("[brain-sync] --no-wait: NOT checking whether the brain vectorised anything.")
-        print("[brain-sync] event/entity extraction runs in the background; wait for READY before searching.")
+        print("[brain-sync] --no-wait: NOT checking that the brain embedded anything; old copies are kept.")
         return 0
 
     try:
         wait_seconds = int(cfg["BRAIN_SYNC_WAIT"])
     except (TypeError, ValueError):
-        wait_seconds = 900
-    # Kiểm TOÀN BỘ file đang được theo dõi, không chỉ file vừa gửi lượt này. Chỉ nhìn lượt này
-    # thì một lượt sync không đổi file nào sẽ báo "done" trong khi não vẫn giữ document hỏng
-    # từ lượt trước — đúng kiểu im lặng đang phải xoá bỏ.
-    tracked = [e.get("document_id") for e in state["files"].values() if e.get("document_id")]
+        wait_seconds = 3600
+    tracked = [e["document_id"] for e in state["entries"].values()]
     failed, pending = await_documents(cfg, token, source_id, tracked, wait_seconds)
-
     for item in failed:
         print("  ! FAILED %s: %s" % (item["title"], item["error"]))
-    if pending:
-        print("[brain-sync] still processing after %ds: %d document(s). Check: npm run brain:logs"
-              % (wait_seconds, len(pending)))
-
-    if failed:
-        # Exit khác 0. Đây là điểm mấu chốt: một lượt sync "thành công" trong khi document không
-        # tới được trạng thái READY là tri thức đã mất mà không ai biết. CI, script và agent đều
-        # đọc exit code — trả 0 ở đây là nói dối cả chuỗi phía sau.
-        print("\n[brain-sync] FAILED: %d of %d document(s) did not reach READY."
-              % (len(failed), len(tracked)))
-        print("[brain-sync] They are NOT fully searchable. The reason for each file is printed above.")
-        print("[brain-sync] Embedding errors  -> npm run embedding, then npm run brain:logs")
-        print("[brain-sync] Extraction errors -> Settings -> Models (an LLM must be configured)")
-        print("[brain-sync] Fix the cause, then run npm run sync again.")
+    if failed or pending:
+        # Không xoá gì: bản cũ vẫn là thứ duy nhất search thấy cho tới khi bản mới READY.
+        print("\n[brain-sync] FAILED: %d failed, %d still processing after %ds (of %d tracked); "
+              "old copies were kept." % (len(failed), len(pending), wait_seconds, len(tracked)))
+        print("[brain-sync] Embedding errors -> npm run embedding, then npm run brain:logs. "
+              "Fix the cause, then run sync again.")
         return 1
 
-    if not pending:
-        print("[brain-sync] done: every document is READY and searchable.")
+    retire = [doc_id for doc_id in dict.fromkeys(state["retire"]) if doc_id not in tracked]
+    if retire:
+        wait_source_idle(cfg, token, source_id, wait_seconds)
+        for doc_id in retire:
+            delete_doc(cfg, token, source_id, doc_id)
+            state["retire"].remove(doc_id)
+            save_state(cfg, state)
+    state["retire"] = []
+    save_state(cfg, state)
+
+    report_knowledge_sync(cfg, token, source_id, created=created, updated=updated, deleted=deleted,
+                          skipped=skipped, rebuild=args.rebuild)
+    print("[brain-sync] done: +%d ~%d -%d moved %d (unchanged %d, held back %d, old copies removed %d). "
+          "source=%s (%s)" % (len(created), len(updated), len(deleted), len(moved), skipped, len(kept),
+                               len(retire), cfg["BRAIN_SOURCE_NAME"], source_id))
     return 0
 
 
-if __name__ == "__main__":
-    _install_file_log()
+def run_locked_sync():
+    handle = _acquire_sync_lock()
     try:
-        sys.exit(main() or 0)
-    except SystemExit:
-        raise
-    except BaseException:
-        # Traceback phải nằm trong file log, không chỉ trên terminal đã đóng.
-        import traceback
+        _install_file_log()
+        try:
+            return main() or 0
+        except SystemExit:
+            raise
+        except BaseException:
+            # Traceback phải nằm trong file log, không chỉ trên terminal đã đóng.
+            import traceback
 
-        traceback.print_exc()
-        print("[brain-sync] FAILED - details in %s" % LOG_FILE)
-        raise
+            traceback.print_exc()
+            print("[brain-sync] FAILED - details in %s" % LOG_FILE)
+            raise
+    finally:
+        _release_sync_lock(handle)
+
+
+if __name__ == "__main__":
+    sys.exit(run_locked_sync())

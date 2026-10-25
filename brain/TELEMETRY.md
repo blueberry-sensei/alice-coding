@@ -15,7 +15,7 @@ Dữ liệu nằm trong chính DB của brain, **không gửi đi đâu**. Bản
 
 | Stage | Là gì | Khi nào phát sinh |
 |---|---|---|
-| `extraction` | **Tinh luyện** — bóc thực thể/sự kiện từ tài liệu | `npm run sync`, hoặc upload tài liệu |
+| `extraction` | **Tinh luyện** — LLM bóc thực thể/sự kiện từ tài liệu | upload tài liệu qua web (`npm run sync` gửi sự kiện đã bóc sẵn, không gọi LLM) |
 | `generation` | Sinh câu trả lời cho người dùng | Hỏi đáp trên UI |
 | `embedding` | Tạo vector | Ingest và truy vấn |
 | `probe` | Nút **Test** ở Settings → Model | Bấm tay |

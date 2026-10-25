@@ -11,6 +11,8 @@ Copy khối dưới, dán lên **đầu** `LOG.md`. ID lấy số kế tiếp, *
 - **Vì sao:** <lý do/đánh đổi Bệ hạ nêu. Không có thì ghi "Bệ hạ không nêu lý do">
 - **Áp dụng khi:** <phạm vi cụ thể — module/tình huống nào. Tránh "mọi nơi" nếu không thật sự vậy>
 - **Nguồn:** phiên YYYY-MM-DD — Bệ hạ: "<trích nguyên văn ngắn>"
+- **Sự kiện:**
+  - <một mệnh đề trọn nghĩa brain phải nhớ, định danh trong `backtick`>
 ```
 
 ## Quy tắc điền
@@ -21,5 +23,8 @@ Copy khối dưới, dán lên **đầu** `LOG.md`. ID lấy số kế tiếp, *
 - **Tag** kebab-case, dùng chung không gian tên với `mistakes/` và tên trang wiki (`#payments`, `#convention`, `#auth`).
 - **Luật** viết ở thể mệnh lệnh để turn sau đọc là thi hành được ngay — không viết kiểu tường thuật ("Bệ hạ có vẻ thích...").
 - **Nguồn** bắt buộc có trích dẫn. Không trích được = đang bịa → đừng ghi.
+- **Sự kiện** là thứ brain nhớ — entry mới phải có (verify `C10` cảnh báo nếu thiếu): mỗi dòng con một mệnh đề đọc riêng vẫn hiểu; mọi định
+  danh, file, hàm, bảng để trong `backtick` (đó là entity), ID `D-/M-xxxx` và `#tag` cũng thành
+  entity. Entry cũ không có khối này thì sync tự tách mỗi bullet thành một sự kiện — xem `brain/SYNC.md`.
 
 `npm run verify` kiểm: ID duy nhất & đúng định dạng, đủ 6 trường, trạng thái hợp lệ, đích `SUPERSEDED` tồn tại.

@@ -10,8 +10,9 @@ Lớp **trí nhớ dài hạn + retrieval** cho Alice, dựng trên engine [**AL
 - **File `knowledge/` là source-of-truth.** Não chỉ là **index dẫn xuất** để tăng recall. Mọi khẳng định vẫn phải đối chiếu source thật (`path:line#anchor`).
 - **Đọc qua MCP, ghi qua Sync.** Alice **query** não bằng 8 tool MCP read-only (agent nào cũng mount MCP được → portable). **Ghi** vào não **chỉ** qua [Sync layer](SYNC.md) (REST + JWT).
 - **Chỉ nuốt folder `knowledge/`** (tri thức đã tinh luyện): `wiki` + `mistakes` + `decisions` + `context` + `changelog`. **KHÔNG** index source code — code do agent đọc trực tiếp khi cần.
-- **Mất não vẫn an toàn:** dựng lại 100% từ file bằng `sync.py --rebuild` (xem [SYNC.md](SYNC.md)).
-- **Kho hỏng thì không cho sync.** `sync.py` chạy [`tools/verify.py`](../tools/verify.py) trước và dừng nếu có ERROR — xem [SYNC.md](SYNC.md) mục *Gate*.
+- **Mất não vẫn an toàn:** dựng lại 100% từ file bằng `npm run sync:rebuild` (xem [SYNC.md](SYNC.md)).
+- **Chỗ hỏng thì không vào não.** `sync.py` chạy [`tools/verify.py`](../tools/verify.py) trước và giữ lại entry/file có ERROR, phần sạch vẫn sync — xem [SYNC.md](SYNC.md) mục *Gate*.
+- **Ghi không cần LLM.** Mỗi entry đi kèm sự kiện đã bóc sẵn (agent viết hoặc suy tất định từ bullet); brain chỉ chunk + embedding.
 
 ## Sơ đồ
 

@@ -16,6 +16,7 @@ Kiểm:
   C7 phình     — cảnh báo prune khi LOG vượt ngưỡng đọc-hết-được
   C8 phủ sóng  — (tuỳ chọn) thư mục module trong code chưa có trang wiki
   C9 sub-agent — policy instance cũ không được nhập Brain mode với host CLI
+  C10 sự kiện  — entry LOG mới phải tự viết khối `- **Sự kiện:**` (brain không bóc lại)
 
 Exit code: 0 = không có ERROR (WARN/INFO vẫn 0) · 1 = có ERROR · 2 = sai tham số.
 Chỉ dùng thư viện chuẩn. Chạy: python tools/verify.py [--fix] [--strict] [--json]
@@ -45,6 +46,8 @@ DEFAULTS = {
     "MAX_CONTEXT_DIGESTS": "40",
     # Tuỳ chọn C8: thư mục con của CODE_ROOT coi là "module" (phân tách bằng dấu phẩy).
     "CODE_MODULE_DIRS": "",
+    # C10: entry LOG ghi từ ngày này phải tự mang khối `- **Sự kiện:**` (bản 2.5.0 phát hành).
+    "EVENTS_REQUIRED_FROM": "2026-10-25",
 }
 
 PILLAR_DIRS = ["wiki", "mistakes", "decisions", "context", "changelog"]
@@ -111,8 +114,12 @@ def read(p):
 
 
 def strip_noise(text):
-    """Bỏ HTML comment + fenced code block: chỗ đó là ví dụ/placeholder, không phải citation thật."""
-    text = COMMENT_RE.sub("", text)
+    """Bỏ HTML comment + fenced code block: chỗ đó là ví dụ/placeholder, không phải citation thật.
+
+    Giữ nguyên số dòng (comment nhiều dòng thành đúng bấy nhiêu dòng trống): sync dùng số dòng
+    của ERROR để giữ lại đúng entry hỏng, lệch một dòng là giữ nhầm entry khác.
+    """
+    text = COMMENT_RE.sub(lambda match: "\n" * match.group(0).count("\n"), text)
     out, in_fence = [], False
     for line in text.splitlines():
         if FENCE_RE.match(line):
@@ -183,7 +190,18 @@ def check_citations(rep, cfg, do_fix):
                             try:
                                 for hit in base_dir.rglob(basename):
                                     if hit.is_file():
-                                        candidates.append(hit.relative_to(ROOT).as_posix())
+                                        # A hit may live under code_root, outside
+                                        # ROOT: show it relative to whichever of the
+                                        # two contains it, else as an absolute path.
+                                        for anchor_dir in (ROOT, code_root):
+                                            try:
+                                                candidates.append(
+                                                    hit.relative_to(anchor_dir).as_posix())
+                                                break
+                                            except ValueError:
+                                                continue
+                                        else:
+                                            candidates.append(hit.as_posix())
                             except OSError:
                                 continue
                         if len(candidates) == 1:
@@ -431,6 +449,20 @@ def check_sub_agent_policy(rep, decisions):
             )
 
 
+# ----------------------------------------------------------- C10 sự kiện
+def check_event_blocks(rep, cfg, entries):
+    """Entry mới phải tự mang sự kiện: brain chỉ nhớ đúng thứ agent đã bóc.
+
+    Entry cũ hơn mốc vẫn dùng sự kiện suy từ bullet (brain/SYNC.md); đó là đường cho kho có sẵn,
+    không phải cách ghi entry mới.
+    """
+    since = cfg["EVENTS_REQUIRED_FROM"]
+    for entry in entries:
+        if entry["date"] >= since and "Sự kiện" not in entry["fields"]:
+            rep.warn("C10", "%s (%s) has no `- **Sự kiện:**` block - write the statements the brain must "
+                     "remember (brain/SYNC.md)" % (entry["id"], entry["date"]), entry.get("file"), entry["line"])
+
+
 # --------------------------------------------------------------- C8 phủ sóng
 def check_coverage(rep, cfg):
     dirs = [d.strip() for d in cfg["CODE_MODULE_DIRS"].split(",") if d.strip()]
@@ -509,6 +541,7 @@ def main():
     n_digests = check_context(rep)
     check_bloat(rep, cfg, mistakes, decisions, n_digests)
     check_sub_agent_policy(rep, decisions)
+    check_event_blocks(rep, cfg, mistakes + decisions)
     check_coverage(rep, cfg)
 
     emit(rep, args.json, fixed)

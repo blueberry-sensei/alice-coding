@@ -1,32 +1,94 @@
-# brain / SYNC — Đồng bộ file → não (chống trùng)
+# brain / SYNC — Đồng bộ file → não theo từng entry, không cần LLM
 
-SAG **không có dedup/idempotency**: nếu ingest mù một file đã sửa, nó tạo **document + chunk TRÙNG**. `sync.py` giải việc này bằng cách tự giữ map `file → document_id + sha256`.
+File trong `knowledge/` là source-of-truth; não là index dẫn xuất. `sync.py` đẩy tri thức vào não
+theo **entry**, kèm **sự kiện đã bóc sẵn** — brain chỉ chia chunk và gọi model embedding, **không
+gọi LLM nào**. Vì vậy sync không còn phụ thuộc quota của nhà cung cấp LLM, không còn lỗi schema của
+model, và sửa một entry chỉ tốn đúng một entry.
 
 Sau một lượt có thay đổi, sync tự ghi event **Knowledge write** vào Settings → Telemetry với source,
-danh sách file tạo/cập nhật/xoá và tổng `+ / ~ / -`. Event chỉ được gửi sau khi ingest request hoàn
-tất và `.sync-state.json` đã lưu; sửa Markdown trên host mà chưa sync thì chưa phải tri thức trong
-Brain. Lượt không có diff không tạo event.
+danh sách entry tạo/cập nhật/xoá và tổng `+ / ~ / -`. Lượt không có diff không tạo event.
 
-## Gate: verify chạy TRƯỚC, hỏng thì không sync
+## Entry — đơn vị đồng bộ
 
-`sync.py` gọi [`tools/verify.py`](../tools/verify.py) trước mọi thứ và **dừng nếu còn ERROR**.
+| File | Một entry là |
+|---|---|
+| `decisions/LOG.md`, `mistakes/LOG.md` | một khối `## D-xxxx …` / `## M-xxxx …` |
+| mọi file khác trong phạm vi | một mục `## …`; phần trước `##` đầu tiên (H1 + mở bài) là một entry riêng |
 
-> Vì sao đặt gate ở đây: sync là **chỗ nghẽn bắt buộc** của cả hệ thống — không sync thì não không có tri thức mới, agent mất recall. Đặt kiểm tra tại đây khiến kỷ luật trở thành **bắt buộc** mà vẫn **không** phải khoá vào hook riêng của agent nào (Claude Code hook, Codex hook…). Đây là lớp phòng thủ duy nhất sống **ngoài** context của model, nên nó vẫn còn nguyên sau auto-compact.
+Mỗi entry là một document trong não, tên `<file>#<ID hoặc tiêu đề mục>` (ví dụ
+`decisions/LOG.md#D-0042`). `## ` nằm trong code fence không tách entry.
 
-Sync khi kho tri thức đang hỏng còn tệ hơn không sync: nó nhồi trang mồ côi, citation chết và entry trùng ID vào não, làm recall **tệ đi**.
+## Sự kiện — agent tự bóc, brain không bóc
+
+Mỗi entry mang theo danh sách **sự kiện**: mệnh đề trọn nghĩa (đọc riêng vẫn hiểu), dòng nguồn của
+nó (để cite đúng dòng) và các entity của nó. Có hai cách có sự kiện:
+
+**1. Agent tự viết (bắt buộc cho entry mới)** — thêm khối `- **Sự kiện:**` vào entry, mỗi dòng con một
+mệnh đề. Entry LOG ghi từ `EVENTS_REQUIRED_FROM` (mặc định 2026-10-25, `tools/verify.config`) mà thiếu khối
+này thì `npm run verify` cảnh báo `C10`:
+
+```md
+## D-0042 · [2026-10-22] Hoàn tiền chỉ đi qua một cổng, có idempotency key · #payments
+
+- **Trạng thái:** ACTIVE
+- **Luật:** …
+- **Sự kiện:**
+  - Mọi lệnh hoàn tiền đi qua `refundOrder()` ở `src/payments/refund.ts`, thay luật cũ D-0017.
+  - `refundOrder()` bắt buộc nhận `idempotency_key`; gọi lại cùng key trả kết quả lần đầu, không hoàn lần hai.
+  - Webhook của cổng thanh toán không được tự hoàn tiền; nó chỉ ghi trạng thái vào `payment_events`.
+```
+
+- Entity của một dòng: mọi đoạn trong `backtick` (đường dẫn `a/b.ts:12#x` được rút về `a/b.ts`),
+  mọi ID `D-xxxx`/`M-xxxx`, mọi `#tag`; cộng ID + tag của entry (LOG) hoặc đường dẫn file (file khác).
+- Có khối này thì brain dùng **đúng các dòng đó** (cộng một sự kiện tiêu đề mang ID + trạng thái).
+
+**2. Entry cũ không có khối** — sync suy sự kiện **tất định** từ cấu trúc sẵn có của entry: mỗi bullet
+(`**Luật:**`, `**Vì sao:**`, từng mục đánh số…), mỗi đoạn văn, mỗi dòng bảng, mỗi tiêu đề con là một
+sự kiện; bullet con mang theo field và bullet cha làm ngữ cảnh (`D-0042 (ACTIVE) › Luật › … › webhook
+chỉ ghi trạng thái`). Entity lấy y như cách 1. Không có LLM nào trong đường này.
+
+Đổi cách tách entry/suy sự kiện thì bump `DERIVE_VERSION` trong `sync.py`: mọi entry được gửi lại
+đúng một lần.
+
+## Gate: verify chạy TRƯỚC, chỉ giữ lại đúng chỗ hỏng
+
+`sync.py` chạy [`tools/verify.py`](../tools/verify.py) `--json` trước mọi thứ:
+
+| ERROR của verify gắn với | Sync làm gì |
+|---|---|
+| một dòng nằm trong entry X | **giữ lại** X — não giữ bản trước đó của X; mọi entry khác vẫn sync |
+| một file trong phạm vi nhưng không có dòng (vd `ROUTER.md` thiếu trang) | giữ lại mọi entry của file đó, kể cả không xoá entry đã biến mất |
+| một file ngoài phạm vi não (vd `ALICE.project.md`) | không giữ gì, chỉ in ra |
+| không gắn được với file nào | **dừng cả lượt** — không biết phần nào sạch |
+
+Mỗi entry bị giữ được in kèm lý do (`= HELD decisions/LOG.md#D-0123 …`) và đếm trong dòng `done:`.
+Luật verify **không** bị nới: `npm run verify` vẫn đỏ cho tới khi sửa xong, chỉ là một citation mồ
+côi ở chỗ này không còn chặn tri thức ở chỗ khác.
 
 `--no-verify` tồn tại để gỡ lỗi. Dùng nó để né gate là vi phạm `ALICE.md` mục 6.
 
 ## Cách hoạt động
-- **State** `brain/.sync-state.json` (gitignore): `{ "schema": 2, "source_id": …, "files": { "wiki/payments.md": {"document_id": …, "sha256": …} } }`.
-- Với từng file `.md` trong phạm vi:
-  - **Mới** (chưa có trong state) → `ingest` → ghi map.
-  - **Đổi** (sha256 khác) → **delete document cũ + ingest lại** → cập nhật hash. *(Không dùng `/reprocess` của SAG vì nó đọc bản copy nội bộ, không phải file sống.)*
-  - **Trùng hash** → bỏ qua (rẻ).
-- File có trong state nhưng **mất trên đĩa** → delete document + xoá khỏi state.
+
+- **State** `brain/.sync-state.json` (gitignore):
+  `{ "schema": 3, "source_id": …, "entries": { "decisions/LOG.md#D-0042": {"document_id": …, "sha256": …, "line": 3} }, "retire": [] }`.
+- `sha256` băm **nội dung** entry (không băm số dòng). Với từng entry:
+  - **Mới** → `POST /sources/{id}/documents/ingest-extracted` (text + dòng bắt đầu + sự kiện).
+  - **Đổi** → ingest bản mới; document cũ vào `retire`.
+  - **Chỉ dời dòng** (sửa entry phía trên) → `POST /sources/{id}/documents/origins`, không nhúng lại gì.
+  - **Trùng hash, đúng dòng** → bỏ qua.
+  - **Mất khỏi file** → document vào `retire`.
+- Chờ mọi document đang theo dõi `ready` → chờ source idle → xoá đúng các document trong `retire`.
+  Có document `failed` hoặc còn đang xử lý thì **không xoá gì**: bản cũ vẫn là thứ search thấy.
 
 ### Schema của state
-`schema` được version hoá. State cũ hơn script → `sync.py` **dừng và yêu cầu `--rebuild`**, thay vì diễn giải sai map rồi đẻ ra document trùng. Rebuild luôn an toàn vì file `knowledge/` mới là source-of-truth.
+State v2 (theo file) được chuyển tự động: document theo file không bị xoá trước mà nằm trong
+`retire`, vẫn trả lời search cho tới khi mọi entry mới `ready` — não không có lúc rỗng. Schema lạ
+khác → `sync.py` dừng và yêu cầu `npm run sync:rebuild`.
+
+### Citation
+Brain lưu `origin_path` + `origin_line` của mỗi entry và dòng bắt đầu của từng chunk/sự kiện. MCP
+`search`, `grep`, `get_chunk`, `outline`, `get_entity` in `Cite: decisions/LOG.md:1234 · id=…`; `read`
+đánh số theo dòng của chính file đó. Vẫn **mở file ra xem** trước khi tin (xem `RETRIEVAL.md`).
 
 ## Phạm vi (mặc định)
 - **Include:** `wiki/`, `mistakes/`, `decisions/`, `context/`, `changelog/` (chỉnh qua `BRAIN_INCLUDE`).
@@ -35,58 +97,48 @@ Sync khi kho tri thức đang hỏng còn tệ hơn không sync: nó nhồi tran
 
 ## Chạy
 ```bash
-npm run sync                 # đồng bộ incremental (chỉ file đổi)
-npm run sync:rebuild         # xoá sạch source + ingest lại toàn bộ
+npm run sync                 # đồng bộ incremental (chỉ entry đổi)
+npm run sync:rebuild         # gửi lại mọi entry, rồi mới xoá mọi document cũ của source
 npm run sync:no-verify       # bỏ gate — chỉ khi gỡ lỗi
-npm run sync:no-wait         # không chờ vector hoá — sẽ KHÔNG phát hiện được document hỏng
+npm run sync:no-wait         # không chờ vector hoá — KHÔNG phát hiện document hỏng, không xoá bản cũ
 npm.cmd run sync -- --config path/brain.config   # cờ có giá trị: xem ghi chú dưới
 ```
 
 > Trên **Windows PowerShell**, `npm` là `npm.ps1` và shim đó nuốt mất token `--`, nên
 > `npm run sync -- --config …` không tới được script. Cờ nào cần giá trị thì gọi `npm.cmd`.
 > Cờ không có giá trị đều đã có script npm riêng (`sync:rebuild`, `sync:no-verify`, …).
-Máy không có Python → chạy trong container: `docker compose exec api python /work/brain/sync/sync.py`.
+
+Brain phải chạy image có `ingest-extracted` (alice-brain mới). Image cũ trả 404/405 và sync dừng với
+hướng dẫn `npm run brain` — **không** lùi về đường LLM.
 
 ## Nhịp sync (tiêu chí C)
 
 | Thời điểm | Sync? |
 |---|---|
 | Init lần đầu | Có (INITIALIZATION Bước 5) |
-| **Mỗi turn ghi `decisions/` hoặc `mistakes/`** | **KHÔNG** — ghi file thôi |
+| **Mỗi turn ghi `decisions/` hoặc `mistakes/`** | Ghi file; sync khi xong task |
 | Cuối task, sau khi distill + prune | **Có** — một lần, gộp hết |
-| Cuối phiên dài | Có |
-| Mất `.sag-data` / đổi embedding model / state sai schema | `--rebuild` |
+| Mất dữ liệu não / đổi embedding model / state sai schema | `npm run sync:rebuild` |
 
-> **Ghi file là rẻ, sync là đắt.** Mỗi lần sync một file đã đổi = xoá document + ingest lại + SAG chạy LLM extract nền. Ghi từng turn nhưng sync gộp cuối task là nhịp đúng.
+> Sync một entry đã đổi = nhúng lại vài chục câu bằng model embedding cục bộ, không còn LLM. Vẫn
+> gộp cuối task cho gọn, nhưng sync không còn là việc đắt. Lần đầu (hoặc rebuild) phải nhúng cả kho.
 
 ## Exit code — sync KHÔNG được im lặng khi tri thức không vào được não
 
-`POST .../documents/ingest` chỉ **đăng ký** document; chunk hoá, vector hoá và trích xuất chạy
-nền. Nếu chỉ nhìn lượt ingest thì embedding hỏng vẫn cho ra "done" và exit 0 — trong khi text nằm
-trong DB **không có vector**, search không bao giờ trả nó về, và không ai biết. Đó là kiểu hỏng
-tệ nhất: người dùng tin là mình đã ghi được.
-
-Vì vậy sau khi ingest, sync **chờ** rồi mới kết luận:
+`ingest-extracted` chỉ **đăng ký** document; chunk + vector hoá chạy nền. Vì vậy sau khi gửi, sync
+**chờ** rồi mới kết luận:
 
 | Kết quả | In ra | Exit |
 |---|---|---|
-| Mọi document `ready` | `done: every document is READY and searchable.` | `0` |
-| Có document `failed` | lý do từng file + cách kiểm tra | **`1`** |
-| Hết thời gian chờ mà còn đang xử lý | cảnh báo còn N document | `0` |
+| Mọi document `ready`, bản cũ đã xoá | `done: +a ~b -c moved d (…, held back h, …)` | `0` |
+| Có entry bị giữ vì verify | dòng `= HELD …` cho từng entry + `held back h` trong `done:` | `0` |
+| Có document `failed` hoặc hết `BRAIN_SYNC_WAIT` mà còn đang xử lý | lý do từng document; bản cũ được giữ | **`1`** |
 
-Thời gian chờ tối đa: `BRAIN_SYNC_WAIT` (giây, mặc định `900`). Bỏ hẳn bước chờ:
-`npm run sync:no-wait` — khi đó sync không còn khả năng phát hiện document hỏng.
-
-Hai nhóm nguyên nhân khi `failed`, phân biệt bằng chính dòng lỗi in ra:
-
-| Lỗi nói về | Nghĩa là | Kiểm theo thứ tự |
-|---|---|---|
-| embedding / vector / index | chunk không có vector → search vector không thấy | `npm run embedding` → `npm run brain:logs` |
-| extraction / LLM / provider | chưa cấu hình LLM hoặc provider lỗi → không có event/entity | Settings → Models |
-
-> **Chưa cấu hình LLM thì mọi document sẽ `failed` và sync exit 1.** Đó là có chủ đích: một não
-> chỉ có chunk mà không có event/entity là não chưa dùng được, và bản cũ im lặng về chuyện đó.
+Thời gian chờ tối đa: `BRAIN_SYNC_WAIT` (giây, mặc định `3600`, đủ cho lượt full đầu tiên). Document `failed` gần như luôn là lỗi
+embedding: `npm run embedding` → `npm run brain:logs`.
 
 ## Lưu ý
-- Sau ingest, SAG chạy **extract nền** (LOADING → EXTRACTING → READY). Chỉ document **READY** mới search tốt.
-- `document.title` = đường dẫn tương đối của file → dễ map ngược từ kết quả search về file thật.
+- Upload tài liệu thủ công qua web vẫn đi đường LLM cũ (cần Settings → Models). Sync tri thức
+  không bao giờ đi qua đường đó.
+- `document.filename` = `<file>#<entry>` → map ngược từ kết quả search về file thật rất dễ; `Cite:`
+  còn cho đúng dòng.

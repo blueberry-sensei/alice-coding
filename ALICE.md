@@ -130,7 +130,9 @@ Cập nhật kho tri thức là **bổn phận tự động**, Bệ hạ **khôn
 
 **Ghi cuối task** (gộp lại cho rẻ): `wiki/`, `changelog/`, prune, và **sync não**.
 
-> **Nhịp chi phí:** ghi file là rẻ → làm ngay, từng turn. `sync.py` là đắt (xoá + ingest lại + LLM extract) → **gộp, chạy một lần cuối task**. Đừng sync sau mỗi turn.
+> **Nhịp chi phí:** ghi file là rẻ → làm ngay, từng turn. `sync.py` chỉ gửi entry đã đổi và chỉ chạy embedding (không LLM) → vẫn **gộp, chạy một lần cuối task**. Đừng sync sau mỗi turn.
+>
+> **Brain nhớ đúng thứ entry nói ra.** Brain không bóc lại bằng LLM; entry mới **phải** có khối `- **Sự kiện:**` do agent tự viết (verify `C10`); chỉ entry cũ mới dùng sự kiện suy từ bullet (`brain/SYNC.md`). Mỗi dòng một mệnh đề trọn nghĩa, định danh trong `backtick`.
 
 Coi việc **bỏ sót ghi tri thức là lỗi chưa hoàn thành task**, ngang với quên verify.
 
@@ -151,7 +153,7 @@ npm run verify          # bắt: citation chết, trang mồ côi, entry sai for
 npm run verify:fix    # tự nắn số dòng citation bị trôi
 ```
 
-`brain/sync/sync.py` **tự chạy verify và từ chối sync nếu còn ERROR**. Vì không sync thì não không có tri thức mới (→ mất recall), kỷ luật trở thành **bắt buộc** mà vẫn không khoá vào hook riêng của agent nào.
+`brain/sync/sync.py` **tự chạy verify và giữ lại mọi entry còn ERROR** (não giữ bản cũ của entry đó, phần sạch vẫn sync). Entry hỏng không vào được não (→ lượt sau mất recall đúng chỗ đó), nên kỷ luật trở thành **bắt buộc** mà vẫn không khoá vào hook riêng của agent nào, và một lỗi ở chỗ này không còn chặn tri thức ở chỗ khác.
 
 ## 10. Router nhanh
 

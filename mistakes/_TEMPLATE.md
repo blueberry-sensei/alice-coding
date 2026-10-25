@@ -12,6 +12,8 @@ Copy khối dưới, dán lên **đầu** `LOG.md`. ID lấy số kế tiếp, *
 - **Root cause:** <nguyên nhân gốc, không phải triệu chứng>
 - **Bài học:** <điều rút ra>
 - **Phòng lần sau:** <quy tắc/kiểm tra cụ thể để chặn tái phạm>
+- **Sự kiện:**
+  - <một mệnh đề trọn nghĩa brain phải nhớ, định danh trong `backtick`>
 ```
 
 ## Quy tắc điền
@@ -21,5 +23,7 @@ Copy khối dưới, dán lên **đầu** `LOG.md`. ID lấy số kế tiếp, *
   - Dùng `#luôn-đọc` cho bài học **xuyên suốt mọi module** (vd "không tin memory, luôn đọc source"). Tag này khiến entry được nạp ở **mọi** task — dùng tiết kiệm.
 - **Phòng lần sau** phải là **kiểm tra cụ thể làm được**, không phải lời hứa. Xấu: *"cẩn thận hơn"*. Tốt: *"trước khi đổi handler webhook, grep tất cả nơi gọi `retry(` và kiểm idempotency key"*.
 - Trích code thì dùng dạng `` `path:line#anchor` `` để `tools/verify.py` bắt được khi code trôi.
+- **Sự kiện** là thứ brain nhớ — entry mới phải có (verify `C10` cảnh báo nếu thiếu): mỗi dòng con một mệnh đề đọc riêng vẫn hiểu, định danh
+  trong `backtick`. Entry cũ không có khối này thì sync tự tách mỗi bullet thành một sự kiện — xem `brain/SYNC.md`.
 
 `npm run verify` kiểm: ID duy nhất & đúng định dạng, đủ 6 phần, trạng thái hợp lệ, đích `SUPERSEDED` tồn tại, citation còn resolve.

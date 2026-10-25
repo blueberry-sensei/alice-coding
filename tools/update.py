@@ -219,10 +219,21 @@ def m_2_4_9(root, dry):
     ]
 
 
+def m_2_5_0(root, dry):
+    """2.5.0: sync theo entry cần image alice-brain có ingest-extracted."""
+    del root, dry
+    return [
+        "run `npm run brain` to pull an alice-brain image that accepts pre-extracted entries, "
+        "then `npm run sync` once: it embeds the whole knowledge base entry by entry (old file "
+        "documents stay searchable until every entry is ready)"
+    ]
+
+
 MIGRATIONS = [
     ("2.0.0", m_2_0_0),
     ("2.4.8", m_2_4_8),
     ("2.4.9", m_2_4_9),
+    ("2.5.0", m_2_5_0),
 ]
 
 

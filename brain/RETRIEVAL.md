@@ -41,6 +41,7 @@ Hai entry `ACTIVE` mâu thuẫn nhau → **cái có ngày mới hơn thắng**, 
 
 ## Kỷ luật citation (bắt buộc)
 - Mỗi tri thức dùng để quyết định phải gắn `chunk_id`/`document_id`.
+- `search`/`grep`/`get_chunk`/`outline`/`get_entity` in sẵn `Cite: <file>:<dòng> · id=<document>` cho tri thức đã sync — đó là dòng thật trong file của project; `read(document_id, offset=<dòng đó>)` đọc tiếp đúng chỗ. `list_documents` gộp theo file, truyền `path` để liệt kê entry của một file.
 - **Luôn map ngược ra `path:line#anchor` thật và MỞ file đó ra xem** trước khi tin — não chỉ là index, file mới là chân lý. Trang wiki có thể đã cũ hơn code; `npm run verify` bắt được citation trỏ sai, nhưng **không** bắt được nội dung mô tả đã lỗi thời.
 
 ## Proof-of-load (forcing function cho tiêu chí A)

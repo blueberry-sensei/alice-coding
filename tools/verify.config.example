@@ -17,3 +17,6 @@ MAX_CONTEXT_DIGESTS=40
 # với retrieval. Để trống thì bỏ qua kiểm tra này.
 # CODE_MODULE_DIRS=src,packages,apps
 CODE_MODULE_DIRS=
+
+# --- C10: entry LOG ghi từ ngày này phải có khối `- **Sự kiện:**` (WARN nếu thiếu) ---
+EVENTS_REQUIRED_FROM=2026-10-25

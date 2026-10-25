@@ -1146,6 +1146,7 @@ const [cmd, ...rest] = process.argv.slice(2);
     case "embedding-purge": process.exit(embeddingPurge(rest));
     case "verify":   process.exit(python("tools/verify.py", rest));
     case "sync":     process.exit(sync(rest));
+    case "test-sync": process.exit(python("brain/sync/test_sync.py", rest));
     case "update":   process.exit(python("tools/update.py", rest));
     case "mcp":      process.exit(mcp());
     case "doctor":   process.exit(await doctor());

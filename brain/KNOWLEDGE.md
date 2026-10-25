@@ -20,6 +20,11 @@ Ghi *thật*, không bịa; đối chiếu source.
 | Thay đổi code | [`changelog/<module>.md`](../changelog/README.md) |
 | Mạch truyện phiên, việc còn treo | digest [`context/`](../context/README.md) + `INDEX.md` |
 
+**Sự kiện do chính agent bóc.** Brain không chạy LLM để hiểu entry; nó nhớ đúng những mệnh đề mà
+entry mang theo. Entry mới phải có khối `- **Sự kiện:**` (verify `C10` cảnh báo nếu thiếu) — mỗi dòng con một mệnh đề trọn
+nghĩa, định danh để trong `backtick` (xem [`SYNC.md`](SYNC.md) mục *Sự kiện*). Entry cũ không có khối
+đó thì sync tự tách mỗi bullet/đoạn thành một sự kiện.
+
 ### 3. PRUNE — dọn rác (bước mới, đừng bỏ)
 
 > Không có bước này thì kho tri thức chỉ phình. Ba trong bốn trụ cột là append-only, nên **thêm mà không dọn = recall tệ dần**: SAG sẽ trả về 5 event gần giống nhau và tri thức đúng bị loãng.
@@ -45,7 +50,7 @@ Phải **0 ERROR**. Đây cũng là gate của bước 5.
 ```bash
 npm run sync
 ```
-`sync.py` **tự chạy verify trước và từ chối chạy nếu còn ERROR** — nên bước 4 và 5 thực chất là một cổng duy nhất. Không có não (brain disabled) thì bỏ bước này, **nhưng vẫn phải chạy verify**.
+`sync.py` **tự chạy verify trước**: entry/file còn ERROR bị **giữ lại** (não giữ bản cũ, sync in `= HELD …`), phần sạch vẫn vào não. Giữ lại không phải xong — bước 4 vẫn phải 0 ERROR. Không có não (brain disabled) thì bỏ bước này, **nhưng vẫn phải chạy verify**.
 
 ### 6. Report ngắn
 Đã thêm/sửa trụ cột nào (nêu ID), đã prune gì, verify sạch chưa, sync (+/~/-), phần còn bỏ ngỏ.
@@ -60,11 +65,11 @@ npm run sync
 | **Cuối mỗi task** | Chạy đủ 6 bước trên |
 | Cuối phiên dài | Chạy lại bước 3 (prune) + 4 + 5 |
 
-**Ghi file là rẻ → làm ngay. Sync là đắt → gộp lại cuối task.** Đừng sync sau mỗi turn.
+**Ghi file là rẻ → làm ngay. Sync gộp lại cuối task.** Sync chỉ gửi entry đã đổi và chỉ chạy embedding, nhưng vẫn không cần chạy sau mỗi turn.
 
 ## Nguyên tắc
 - **Tự chủ, không đợi nhắc** — ngang bổn phận ở `ALICE.md` mục 9a. Bỏ ghi tri thức = task **chưa** hoàn thành.
 - **Không bịa để lấp đầy.** Không có bài học thật thì thôi.
 - **Không xoá, chỉ đổi trạng thái.** Xoá là mất lịch sử vì-sao.
 - **File là chân lý:** ghi vào file trước, rồi sync — không ghi thẳng vào não (não là index dẫn xuất).
-- Đây cũng là đường **rebuild an toàn:** tri thức nằm ở file nên `sync.py --rebuild` luôn dựng lại được não.
+- Đây cũng là đường **rebuild an toàn:** tri thức nằm ở file nên `npm run sync:rebuild` luôn dựng lại được não (bản cũ chỉ bị xoá khi bản mới đã `ready`).

@@ -6,6 +6,39 @@ Quy ước version: **semver**. MAJOR đổi = có breaking change bắt buộc 
 
 ---
 
+## 2.5.0 — Sync theo entry, sự kiện bóc sẵn, brain không cần LLM để ghi tri thức
+
+**Cần image alice-brain mới.** Chạy `npm run update`, rồi `npm run brain` (kéo image có
+`POST /sources/{id}/documents/ingest-extracted`), rồi `npm run sync` một lần.
+
+Trước: mỗi lần một file đổi, brain bóc lại **cả file** bằng LLM. LOG vài nghìn dòng là vài chục lượt
+LLM cho một dòng sửa → hết quota, model trả sai schema, document `failed`, và não đứng nhiều ngày.
+Một ERROR verify ở bất kỳ đâu (citation mồ côi do repo khác đang dở) cũng chặn **toàn bộ** sync.
+
+Nay:
+
+| | 2.4.x | 2.5.0 |
+|---|---|---|
+| Đơn vị sync | file | entry (`## D-xxxx`/`## M-xxxx`, mỗi mục `##`) |
+| Ai bóc sự kiện | LLM của brain | agent (khối `- **Sự kiện:**`) hoặc suy tất định từ bullet; brain chỉ chunk + embedding |
+| Sửa một quyết định | nhúng + bóc lại cả LOG | gửi lại đúng entry đó; entry chỉ dời dòng thì chỉ cập nhật vị trí |
+| Verify có ERROR | dừng cả sync | giữ lại đúng entry/file hỏng (`= HELD …`), phần sạch vẫn sync |
+| Citation qua MCP | chunk_id | thêm `Cite: <file>:<dòng> · id=…` |
+
+- **State v2 → v3 tự chuyển**, không cần `--rebuild`. Lượt đầu nhúng cả kho theo entry; document theo
+  file cũ vẫn trả lời search cho tới khi mọi entry `ready`, rồi mới bị xoá — não không có lúc rỗng.
+  Thời gian lượt đầu tỉ lệ với cả kho và tốc độ model embedding của bạn.
+- **Image cũ** trả 404/405 cho đường mới → sync dừng với hướng dẫn `npm run brain`. Sync **không** lùi về
+  đường LLM.
+- `npm run sync` không cần LLM nữa. Settings → Models chỉ còn cần cho chat và cho upload tài liệu
+  thủ công qua web (đường đó vẫn bóc bằng LLM).
+- Field mới `- **Sự kiện:**`: entry LOG ghi từ 2026-10-25 thiếu khối này bị verify cảnh báo `C10`
+  (`EVENTS_REQUIRED_FROM` trong `tools/verify.config`); entry cũ vẫn dùng sự kiện suy từ bullet. Xem `brain/SYNC.md`.
+- `tools/verify.py`: comment HTML nhiều dòng không còn làm lệch số dòng báo lỗi; citation trỏ ra
+  ngoài `knowledge/` không còn làm verify crash.
+
+---
+
 ## 2.4.16 — Embedding tự thu hồi khi không còn ai dùng
 
 **Không breaking.** Chạy `npm run update`, rồi `npm run brain`.

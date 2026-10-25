@@ -37,7 +37,7 @@ Ghim một version cụ thể: `npm.cmd run update -- --ref v2.1.0` (dùng `npm.
 1. Đọc phần **MIGRATION phải làm tay** mà `update` in ra (nếu có) → đối chiếu [`MIGRATIONS.md`](MIGRATIONS.md).
 2. Xử lý file `.new` nếu có xung đột: so sánh, gộp, rồi xoá `.new`.
 3. Chạy `npm run verify` — nếu template siết thêm quy ước mới, đây là chỗ nó báo.
-4. Nếu có ERROR về format trụ cột (vd template thêm trường bắt buộc) → sửa rồi mới `sync`. Bản thân `sync.py` cũng chặn nếu còn ERROR.
+4. Nếu có ERROR về format trụ cột (vd template thêm trường bắt buộc) → sửa rồi mới `sync`. Bản thân `sync.py` cũng giữ lại mọi entry còn ERROR (chỉ phần sạch được sync).
 5. Chạy `npm run sync` để não khớp lại file.
 6. Chạy `npm run wire` để entry point ở **root project** (`ALICE.md`, khối ALICE trong `CLAUDE.md`/`AGENTS.md`/`GEMINI.md`, skill `/alice`) khớp lại template mới. Những file này nằm ngoài `knowledge/` nên `update` **không bao giờ** đụng tới — chỉ `wire` mới sinh lại chúng.
 
